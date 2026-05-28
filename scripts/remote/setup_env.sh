@@ -96,7 +96,7 @@ if torch.cuda.is_available():
     print(f'GPU 数量: {torch.cuda.device_count()}')
     for i in range(torch.cuda.device_count()):
         print(f'  GPU {i}: {torch.cuda.get_device_name(i)}')
-        print(f'  显存: {torch.cuda.get_device_properties(i).total_mem / 1024**3:.1f} GB')
+print(f'  显存: {torch.cuda.get_device_properties(i).total_memory / 1024**3:.1f} GB')
 "
 
 echo ""

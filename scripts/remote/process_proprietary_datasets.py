@@ -45,6 +45,8 @@ OUTPUT_DIR = os.path.join(DATASET_DIR, "converted")
 
 # HuggingFace 镜像（国内加速）
 os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
+# 将 HF 缓存目录指向数据盘，避免撑满系统盘
+os.environ["HF_HOME"] = "/root/autodl-tmp/cache/huggingface"
 
 
 # ============================================================

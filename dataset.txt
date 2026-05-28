@@ -1,0 +1,12 @@
+# 专有数据集来源（HuggingFace）
+# 这些数据集将在远端 AutoDL 直接下载，无需本地同步
+
+# 数据集1: 中文色情文学合集 - 50个分类JSON文件，字段: {"text": "长篇小说文本"}
+# 规模: 10K-100K 条，每条为完整小说
+https://huggingface.co/datasets/ystemsrx/Erotic_Literature_Collection
+
+# 数据集2: H语料库2023 - zip压缩包，内含中文小说文本文件
+https://huggingface.co/datasets/a686d380/h-corpus-2023
+
+# 数据集3: 性小说过滤版 - JSONL格式 (SexNovel.jsonl)
+https://huggingface.co/datasets/Seikaijyu/Sex-novel-filtered

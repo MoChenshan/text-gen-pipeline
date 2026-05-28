@@ -1,0 +1,66 @@
+# ============================================================
+# LLaMA-Factory 训练配置 - Qwen3.6-27B LoRA 微调（多卡版本）
+# 
+# 适用: 2×RTX PRO 6000 96GB 或其他多卡环境
+# 使用 DeepSpeed ZeRO-2 进行数据并行
+#
+# 使用方式:
+#   bash run_train.sh 2        # 自动使用此配置
+#   bash run_train.sh 2 0,1    # 指定 GPU
+# ============================================================
+
+### 模型配置 ###
+model_name_or_path: /root/autodl-tmp/models/Qwen3.6-27B
+trust_remote_code: true
+
+### 训练方法 ###
+stage: sft
+do_train: true
+finetuning_type: lora
+
+### LoRA 配置 ###
+lora_rank: 64
+lora_alpha: 128
+lora_dropout: 0.05
+lora_target: all
+
+### DeepSpeed ###
+deepspeed: /root/project/text-gen-pipeline/configs/ds_z2_config.json
+
+### 数据集配置 ###
+dataset: train_mixed
+template: qwen3
+cutoff_len: 4096
+max_samples: 100000
+overwrite_cache: true
+preprocessing_num_workers: 16
+
+### 训练超参数 ###
+# 多卡时每卡 batch_size=4，grad_accum=4，2卡有效batch=32
+per_device_train_batch_size: 4
+gradient_accumulation_steps: 4
+learning_rate: 2.0e-4
+num_train_epochs: 3.0
+lr_scheduler_type: cosine
+warmup_ratio: 0.05
+bf16: true
+ddp_timeout: 180000000
+
+### 优化器 ###
+optim: adamw_torch
+
+### 输出配置 ###
+output_dir: /root/autodl-fs/outputs/qwen3.6-27b-lora
+logging_steps: 10
+save_steps: 500
+save_total_limit: 3
+plot_loss: true
+
+### 评估配置 ###
+per_device_eval_batch_size: 4
+eval_strategy: steps
+eval_steps: 500
+
+### 其他 ###
+report_to: none
+gradient_checkpointing: true

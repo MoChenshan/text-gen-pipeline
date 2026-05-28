@@ -34,8 +34,25 @@ git lfs install
 echo "[2/5] 创建 conda 环境..."
 # AutoDL 通常预装了 conda，如果没有则需要先安装
 if command -v conda &> /dev/null; then
+    # 修复 AutoDL 预装的 .condarc 镜像源问题
+    # pkgs/free 通道 repodata 格式已损坏，需要移除
+    echo "  修复 conda 镜像源配置..."
+    cat > /root/.condarc << 'CONDARC'
+channels:
+  - defaults
+show_channel_urls: true
+default_channels:
+  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main
+custom_channels:
+  conda-forge: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
+  pytorch: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
+CONDARC
+    
+    # 清理 conda 缓存
+    conda clean -i -y 2>/dev/null || true
+    
     conda create -n llama_factory python=3.11 -y || true
-    source activate llama_factory || conda activate llama_factory
+    source activate llama_factory 2>/dev/null || conda activate llama_factory 2>/dev/null || eval "$(conda shell.bash hook)" && conda activate llama_factory
 else
     echo "conda 未找到，使用系统 Python"
 fi

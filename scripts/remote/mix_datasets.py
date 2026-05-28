@@ -275,12 +275,13 @@ def main():
     random.shuffle(final_data)
     print(f"  最终数据集: {len(final_data)} 条")
     
-    # ---- 保存 ----
-    print(f"\n[保存] 写入文件...")
+    # ---- 保存（使用 JSONL 格式，避免 PyArrow 偏移溢出） ----
+    print(f"\n[保存] 写入 JSONL 文件...")
     os.makedirs(OUTPUT_DIR, exist_ok=True)
-    output_path = os.path.join(OUTPUT_DIR, "train_mixed.json")
+    output_path = os.path.join(OUTPUT_DIR, "train_mixed.jsonl")
     with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(final_data, f, ensure_ascii=False, indent=2)
+        for item in final_data:
+            f.write(json.dumps(item, ensure_ascii=False) + "\n")
     
     file_size_mb = os.path.getsize(output_path) / 1024**2
     

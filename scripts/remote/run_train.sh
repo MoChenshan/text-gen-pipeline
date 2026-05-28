@@ -62,7 +62,7 @@ if [ ! -d "/root/autodl-tmp/models/Qwen3.6-27B" ]; then
 fi
 
 # 检查训练数据是否存在
-if [ ! -f "/root/autodl-tmp/datasets/final/train_mixed.json" ]; then
+if [ ! -f "/root/autodl-tmp/datasets/final/train_mixed.jsonl" ]; then
     echo "错误: 训练数据不存在，请先运行数据准备流程"
     echo "  1. python process_proprietary_datasets.py"
     echo "  2. bash download_general_datasets.sh"

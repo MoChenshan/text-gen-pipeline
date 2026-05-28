@@ -1,6 +1,6 @@
 {
   "train_mixed": {
-    "file_name": "/root/autodl-tmp/datasets/final/train_mixed.json",
+"file_name": "/root/autodl-tmp/datasets/final/train_mixed.jsonl",
     "formatting": "sharegpt",
     "columns": {
       "messages": "conversations",

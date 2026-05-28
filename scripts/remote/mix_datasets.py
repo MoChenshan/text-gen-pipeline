@@ -20,7 +20,6 @@ import os
 import json
 import random
 import argparse
-import mmap
 from pathlib import Path
 from typing import List, Dict, Optional
 
@@ -33,150 +32,102 @@ GENERAL_DIR = "/root/autodl-tmp/datasets/general/converted"
 OUTPUT_DIR = "/root/autodl-tmp/datasets/final"
 
 
-def count_json_array_items(filepath: str) -> int:
-    """快速统计 JSON 数组中的条目数（不加载全部内容）"""
-    print(f"    统计条目数: {filepath}")
-    count = 0
-    # 通过计算顶层 JSON 对象的数量来估算
-    # 每个条目以 {"conversations" 开头
-    with open(filepath, "r", encoding="utf-8") as f:
-        for line in f:
-            if '"conversations"' in line and '"from"' not in line:
-                count += 1
-    return count
 
-
-def get_json_line_offsets(filepath: str) -> List[int]:
-    """
-    获取 JSON 数组中每个顶层元素的文件偏移位置
-    用于后续随机访问采样
-    """
-    offsets = []
-    depth = 0
-    in_string = False
-    escape_next = False
-    
-    with open(filepath, "rb") as f:
-        # 使用 mmap 高效扫描大文件
-        try:
-            mm = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
-        except (ValueError, OSError):
-            # 文件为空或无法 mmap
-            return offsets
-        
-        i = 0
-        file_size = mm.size()
-        
-        while i < file_size:
-            byte = mm[i:i+1]
-            char = byte.decode("utf-8", errors="ignore")
-            
-            if escape_next:
-                escape_next = False
-                i += 1
-                continue
-            
-            if char == '\\' and in_string:
-                escape_next = True
-                i += 1
-                continue
-            
-            if char == '"':
-                in_string = not in_string
-            elif not in_string:
-                if char == '{':
-                    if depth == 1:  # 顶层数组中的对象开始
-                        offsets.append(i)
-                    depth += 1
-                elif char == '}':
-                    depth -= 1
-            
-            i += 1
-        
-        mm.close()
-    
-    return offsets
 
 
 def stream_sample_large_json(filepath: str, sample_count: int, seed: int = 42) -> List[Dict]:
     """
-    从大型 JSON 数组文件中流式随机采样
-    使用 reservoir sampling 算法，内存占用恒定
+    从大型 JSON 数组文件中高效随机采样（两遍扫描法）
+    
+    原理：
+    - 文件由 json.dump(..., indent=2) 生成，每个顶层对象以 "  {" 开头
+    - 第一遍：快速扫描记录每个条目的文件字节偏移（只看行首模式，极快）
+    - 随机选择要采样的索引
+    - 第二遍：只 seek 到选中的位置，解析对应条目
     """
+    import time
     print(f"    流式采样 {sample_count} 条 from {os.path.basename(filepath)}...")
     
     rng = random.Random(seed)
-    reservoir = []
-    count = 0
     
-    # 逐条解析 JSON 数组
+    # ---- 第一遍：快速扫描，记录每个顶层对象的字节偏移 ----
+    print(f"      [Pass 1] 扫描条目偏移...")
+    t0 = time.time()
+    offsets = []
+    
+    with open(filepath, "rb") as f:
+        while True:
+            pos = f.tell()
+            line = f.readline()
+            if not line:
+                break
+            # 顶层对象以 "  {" 开头（2空格 + 左花括号）
+            # indent=2 格式下，顶层对象的起始行固定是 "  {\n"
+            if line.startswith(b'  {'):
+                offsets.append(pos)
+    
+    total_count = len(offsets)
+    elapsed = time.time() - t0
+    print(f"      [Pass 1] 完成: {total_count} 条, 耗时 {elapsed:.1f}s")
+    
+    if total_count == 0:
+        print(f"      错误: 未找到任何条目")
+        return []
+    
+    # ---- 随机选择索引 ----
+    actual_sample = min(sample_count, total_count)
+    selected_indices = sorted(rng.sample(range(total_count), actual_sample))
+    print(f"      [采样] 从 {total_count} 条中随机选择 {actual_sample} 条")
+    
+    # ---- 第二遍：只解析选中的条目 ----
+    print(f"      [Pass 2] 解析选中条目...")
+    t0 = time.time()
+    results = []
+    
     with open(filepath, "r", encoding="utf-8") as f:
-        # 跳过开头的 [
-        content = ""
-        depth = 0
-        in_string = False
-        escape_next = False
-        
-        for line in f:
-            for char in line:
-                if escape_next:
-                    escape_next = False
-                    content += char
+        for idx_num, idx in enumerate(selected_indices):
+            # seek 到条目起始位置
+            f.seek(offsets[idx])
+            
+            # 读取该条目的所有行，直到遇到下一个顶层结束
+            lines = []
+            depth = 0
+            first_line = True
+            while True:
+                line = f.readline()
+                if not line:
+                    break
+                lines.append(line)
+                
+                # 简单跟踪花括号深度（不在字符串内的）
+                # 对于 indent=2 格式，顶层对象结束行是 "  }" 或 "  },"
+                if first_line:
+                    depth = 1
+                    first_line = False
                     continue
                 
-                if char == '\\' and in_string:
-                    escape_next = True
-                    content += char
-                    continue
-                
-                if char == '"':
-                    in_string = not in_string
-                    content += char
-                    continue
-                
-                if in_string:
-                    content += char
-                    continue
-                
-                # 不在字符串内
-                if char == '{':
-                    depth += 1
-                    content += char
-                elif char == '}':
-                    depth -= 1
-                    content += char
-                    if depth == 0 and content.strip():
-                        # 完成一个顶层对象
-                        try:
-                            item = json.loads(content.strip())
-                            count += 1
-                            
-                            # Reservoir sampling
-                            if len(reservoir) < sample_count:
-                                reservoir.append(item)
-                            else:
-                                j = rng.randint(0, count - 1)
-                                if j < sample_count:
-                                    reservoir[j] = item
-                            
-                            if count % 500000 == 0:
-                                print(f"      已扫描 {count} 条...")
-                        except json.JSONDecodeError:
-                            pass
-                        content = ""
-                elif char in ' \t\n\r,':
-                    if depth > 0:
-                        content += char
-                    # 顶层的逗号和空白忽略
-                elif char == '[' and depth == 0:
-                    pass  # 跳过最外层的 [
-                elif char == ']' and depth == 0:
-                    pass  # 跳过最外层的 ]
-                else:
-                    content += char
+                stripped = line.strip()
+                if stripped in ('}', '},'):
+                    # 检查缩进：顶层对象的结束 "}" 缩进为 2 空格
+                    if line.startswith('  }') and not line.startswith('    '):
+                        break
+            
+            # 解析 JSON 对象
+            text = ''.join(lines).strip().rstrip(',')
+            try:
+                item = json.loads(text)
+                results.append(item)
+            except json.JSONDecodeError:
+                # 如果简单方法失败，尝试更宽松的解析
+                pass
+            
+            if (idx_num + 1) % 50000 == 0:
+                print(f"        已解析 {idx_num + 1}/{actual_sample} 条...")
     
-    print(f"      扫描完成: 共 {count} 条，采样 {len(reservoir)} 条")
-    return reservoir
+    elapsed = time.time() - t0
+    print(f"      [Pass 2] 完成: 解析 {len(results)} 条, 耗时 {elapsed:.1f}s")
+    
+    return results
 
 
 def load_small_json(filepath: str) -> List[Dict]:

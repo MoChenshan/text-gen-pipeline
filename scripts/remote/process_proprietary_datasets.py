@@ -51,13 +51,57 @@ os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 # 第一部分：数据下载
 # ============================================================
 
-def download_datasets():
-    """从 HuggingFace 下载三个专有数据集"""
+def _download_with_aria2c(url: str, output_dir: str, filename: str) -> str:
+    """使用 aria2c 多线程下载（速度远快于 Python 单线程）"""
+    import subprocess
+    
+    output_path = os.path.join(output_dir, filename)
+    if os.path.exists(output_path):
+        return output_path
+    
+    # 检查 aria2c 是否可用
+    try:
+        subprocess.run(["aria2c", "--version"], capture_output=True, check=True)
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        return None  # aria2c 不可用，回退到 Python 下载
+    
+    print(f"  使用 aria2c 多线程下载: {filename}")
+    cmd = [
+        "aria2c",
+        "-x", "16",           # 16 线程
+        "-s", "16",           # 16 分片
+        "-k", "10M",          # 每片最小 10MB
+        "--dir", output_dir,
+        "--out", filename,
+        "--continue=true",    # 支持断点续传
+        url,
+    ]
+    result = subprocess.run(cmd)
+    if result.returncode == 0 and os.path.exists(output_path):
+        return output_path
+    return None
+
+
+def download_datasets(skip_h_corpus: bool = False):
+    """
+    从 HuggingFace 下载专有数据集
+    
+    Args:
+        skip_h_corpus: 是否跳过 h-corpus-2023（7.18GB，下载较慢）
+    """
     from huggingface_hub import snapshot_download, hf_hub_download
+    
+    # 尝试启用 hf-transfer 加速（如果已安装）
+    try:
+        import hf_transfer
+        os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
+        print("  ✓ hf-transfer 加速已启用")
+    except ImportError:
+        print("  ℹ hf-transfer 未安装，使用默认下载（可选: pip install hf-transfer）")
     
     os.makedirs(RAW_DIR, exist_ok=True)
     
-    # ---- 数据集 1: Erotic_Literature_Collection ----
+    # ---- 数据集 1: Erotic_Literature_Collection (约2GB，多个小JSON) ----
     ds1_dir = os.path.join(RAW_DIR, "erotic_literature_collection")
     if not os.path.exists(ds1_dir) or len(os.listdir(ds1_dir)) < 5:
         print("[1/3] 下载 Erotic_Literature_Collection...")
@@ -71,26 +115,44 @@ def download_datasets():
     else:
         print(f"[1/3] Erotic_Literature_Collection 已存在，跳过")
     
-    # ---- 数据集 2: h-corpus-2023 ----
+    # ---- 数据集 2: h-corpus-2023 (7.18GB zip，可选) ----
     ds2_dir = os.path.join(RAW_DIR, "h-corpus-2023")
-    if not os.path.exists(ds2_dir) or not os.listdir(ds2_dir):
-        print("[2/3] 下载 h-corpus-2023...")
+    if skip_h_corpus:
+        print(f"[2/3] h-corpus-2023 已跳过（--skip_h_corpus）")
+    elif os.path.exists(ds2_dir) and any(
+        f for f in os.listdir(ds2_dir) if not f.endswith('.zip')
+    ):
+        print(f"[2/3] h-corpus-2023 已存在，跳过")
+    else:
+        print("[2/3] 下载 h-corpus-2023 (7.18GB，较大)...")
         os.makedirs(ds2_dir, exist_ok=True)
-        zip_path = hf_hub_download(
-            "a686d380/h-corpus-2023",
-            "h-corpus.zip",
-            repo_type="dataset",
-            local_dir=ds2_dir,
-        )
+        
+        # 优先尝试 aria2c 多线程下载
+        hf_endpoint = os.environ.get("HF_ENDPOINT", "https://huggingface.co")
+        download_url = f"{hf_endpoint}/datasets/a686d380/h-corpus-2023/resolve/main/h-corpus.zip"
+        zip_path = _download_with_aria2c(download_url, ds2_dir, "h-corpus.zip")
+        
+        if zip_path is None:
+            # 回退到 huggingface_hub 下载
+            print("  aria2c 不可用，使用 Python 下载（较慢）...")
+            zip_path = hf_hub_download(
+                "a686d380/h-corpus-2023",
+                "h-corpus.zip",
+                repo_type="dataset",
+                local_dir=ds2_dir,
+            )
+        
         # 解压
         print("  解压 h-corpus.zip...")
         with zipfile.ZipFile(zip_path, "r") as zf:
             zf.extractall(ds2_dir)
+        # 解压完成后删除 zip 节省空间
+        if os.path.exists(zip_path):
+            os.remove(zip_path)
+            print("  已删除 zip 文件节省空间")
         print(f"  ✓ 完成: {ds2_dir}")
-    else:
-        print(f"[2/3] h-corpus-2023 已存在，跳过")
     
-    # ---- 数据集 3: Sex-novel-filtered ----
+    # ---- 数据集 3: Sex-novel-filtered (较小，JSONL) ----
     ds3_dir = os.path.join(RAW_DIR, "sex-novel-filtered")
     if not os.path.exists(ds3_dir) or not os.listdir(ds3_dir):
         print("[3/3] 下载 Sex-novel-filtered...")
@@ -105,7 +167,7 @@ def download_datasets():
     else:
         print(f"[3/3] Sex-novel-filtered 已存在，跳过")
     
-    print("\n所有数据集下载完成!")
+    print("\n数据集下载完成!")
 
 
 # ============================================================
@@ -487,6 +549,8 @@ def main():
     parser = argparse.ArgumentParser(description="专有数据集下载与预处理")
     parser.add_argument("--skip_download", action="store_true",
                         help="跳过下载步骤（数据已存在时使用）")
+    parser.add_argument("--skip_h_corpus", action="store_true",
+                        help="跳过 h-corpus-2023 下载（7.18GB，较慢，可后续单独下载）")
     parser.add_argument("--max_samples", type=int, default=None,
                         help="最终输出的最大样本数（默认: 全部）")
     parser.add_argument("--min_prefix_len", type=int, default=256,
@@ -521,7 +585,7 @@ def main():
     # ---- Step 1: 下载 ----
     if not args.skip_download:
         print("[Step 1] 下载数据集...")
-        download_datasets()
+        download_datasets(skip_h_corpus=args.skip_h_corpus)
     else:
         print("[Step 1] 跳过下载")
     

@@ -41,7 +41,8 @@ from typing import List, Dict, Tuple, Optional
 # ---- 路径配置 ----
 DATASET_DIR = "/root/autodl-fs/datasets/proprietary"
 RAW_DIR = os.path.join(DATASET_DIR, "raw")
-OUTPUT_DIR = os.path.join(DATASET_DIR, "converted")
+# 输出到数据盘 autodl-tmp，避免 autodl-fs 网盘容量限制
+OUTPUT_DIR = "/root/autodl-tmp/datasets/proprietary_converted"
 
 # HuggingFace 镜像（国内加速）
 os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"

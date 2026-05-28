@@ -30,16 +30,16 @@ deepspeed: /root/project/text-gen-pipeline/configs/ds_z2_config.json
 ### 数据集配置 ###
 dataset: train_mixed
 template: qwen3
-cutoff_len: 2048
+cutoff_len: 4096
 max_samples: 50000
 val_size: 0.02
 overwrite_cache: true
 preprocessing_num_workers: 16
 
 ### 训练超参数 ###
-# 多卡时每卡 batch_size=2，grad_accum=8，2卡有效batch=32
-per_device_train_batch_size: 2
-gradient_accumulation_steps: 8
+# 多卡时每卡 batch_size=1，grad_accum=16，2卡有效batch=32
+per_device_train_batch_size: 1
+gradient_accumulation_steps: 16
 learning_rate: 2.0e-4
 num_train_epochs: 1.0
 lr_scheduler_type: cosine

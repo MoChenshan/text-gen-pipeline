@@ -15,8 +15,8 @@ echo ==========================================
 
 REM ---- 配置 ----
 REM 请修改为你的 AutoDL SSH 地址
-SET REMOTE_HOST=root@connect.westb.seetacloud.com
-SET REMOTE_PORT=xxxxx
+SET REMOTE_HOST=root@connect.westd.seetacloud.com
+SET REMOTE_PORT=42655
 SET REMOTE_PROJECT_DIR=/root/project/text-gen-pipeline
 SET REMOTE_DATASET_DIR=/root/autodl-fs/datasets/proprietary
 

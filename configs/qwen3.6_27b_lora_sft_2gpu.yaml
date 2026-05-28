@@ -32,6 +32,7 @@ dataset: train_mixed
 template: qwen3
 cutoff_len: 4096
 max_samples: 100000
+val_size: 0.02
 overwrite_cache: true
 preprocessing_num_workers: 16
 
@@ -42,7 +43,7 @@ gradient_accumulation_steps: 4
 learning_rate: 2.0e-4
 num_train_epochs: 3.0
 lr_scheduler_type: cosine
-warmup_ratio: 0.05
+warmup_steps: 50
 bf16: true
 ddp_timeout: 180000000
 

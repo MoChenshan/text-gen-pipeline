@@ -427,51 +427,58 @@ def build_continuation_pairs(
     - 尽量在段落/句子边界切分
     """
     pairs = []
+    text_len = len(text)
     
-    if len(text) < min_prefix_len + min_continuation_len:
+    if text_len < min_prefix_len + min_continuation_len:
         return pairs
     
-    # 找到所有可能的切分点（句号、段落结束等）
-    split_points = []
-    for i, char in enumerate(text):
-        if char in '。！？\n' and i > min_prefix_len:
-            split_points.append(i + 1)
+    # 使用步进式滑动窗口，直接按 stride 间隔选取候选切分位置
+    # 避免遍历每个字符和 O(n²) 的间距检查
+    cursor = min_prefix_len
     
-    if not split_points:
-        # 如果没有明显的切分点，按固定长度切分
-        split_points = list(range(min_prefix_len, len(text) - min_continuation_len, stride))
-    
-    # 从切分点中采样
-    used_points = []
-    for point in split_points:
-        # 确保与已使用的点有足够间距
-        if any(abs(point - used) < stride for used in used_points):
-            continue
+    while cursor < text_len - min_continuation_len:
+        # 在 cursor 附近寻找最近的句子边界（向前搜索一小段范围）
+        best_point = None
+        search_range = min(200, text_len - cursor)  # 在200字符范围内找句子边界
+        
+        for offset in range(search_range):
+            pos = cursor + offset
+            if pos >= text_len - min_continuation_len:
+                break
+            if text[pos] in '。！？\n':
+                best_point = pos + 1
+                break
+        
+        # 如果附近没有句子边界，就用当前位置
+        if best_point is None:
+            best_point = cursor
         
         # 确定 prefix 范围
-        prefix_start = max(0, point - max_prefix_len)
+        prefix_start = max(0, best_point - max_prefix_len)
         # 尝试在段落开头开始
-        newline_pos = text.find('\n', prefix_start)
-        if newline_pos != -1 and newline_pos < prefix_start + 100:
+        newline_pos = text.find('\n', prefix_start, prefix_start + 100)
+        if newline_pos != -1:
             prefix_start = newline_pos + 1
         
-        prefix = text[prefix_start:point].strip()
+        prefix = text[prefix_start:best_point].strip()
         
         # 确定 continuation 范围
-        continuation_end = min(len(text), point + max_continuation_len)
+        continuation_end = min(text_len, best_point + max_continuation_len)
         # 尝试在句子结尾结束
         for end_char in ['。', '！', '？', '\n']:
-            last_end = text.rfind(end_char, point, continuation_end)
-            if last_end > point + min_continuation_len:
+            last_end = text.rfind(end_char, best_point, continuation_end)
+            if last_end > best_point + min_continuation_len:
                 continuation_end = last_end + 1
                 break
         
-        continuation = text[point:continuation_end].strip()
+        continuation = text[best_point:continuation_end].strip()
         
         # 验证长度
         if len(prefix) >= min_prefix_len and len(continuation) >= min_continuation_len:
             pairs.append((prefix, continuation))
-            used_points.append(point)
+        
+        # 步进到下一个位置
+        cursor = best_point + stride
     
     return pairs
 

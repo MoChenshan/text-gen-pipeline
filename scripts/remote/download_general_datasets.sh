@@ -11,7 +11,7 @@ echo "=========================================="
 echo "  下载通用数据集"
 echo "=========================================="
 
-DATASET_DIR="/root/autodl-fs/datasets/general"
+DATASET_DIR="/root/autodl-tmp/datasets/general"
 mkdir -p ${DATASET_DIR}
 
 # ---- 使用 modelscope 下载（国内速度快） ----
@@ -22,7 +22,7 @@ import os
 import json
 from pathlib import Path
 
-DATASET_DIR = "/root/autodl-fs/datasets/general"
+DATASET_DIR = "/root/autodl-tmp/datasets/general"
 
 def download_from_modelscope():
     """从 ModelScope 下载中文通用数据集"""

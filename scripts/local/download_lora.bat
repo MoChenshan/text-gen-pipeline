@@ -12,7 +12,7 @@ echo ==========================================
 REM ---- 配置 ----
 SET REMOTE_HOST=root@connect.westb.seetacloud.com
 SET REMOTE_PORT=xxxxx
-SET REMOTE_LORA_DIR=/root/autodl-fs/outputs/qwen3.6-27b-lora
+SET REMOTE_LORA_DIR=/root/autodl-tmp/outputs/qwen3.6-27b-lora
 SET LOCAL_OUTPUT_DIR=D:\Project\Python\text-gen-pipeline\outputs\lora
 
 REM 创建本地目录

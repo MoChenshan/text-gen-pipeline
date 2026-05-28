@@ -1,6 +1,6 @@
 {
   "train_mixed": {
-    "file_name": "/root/autodl-fs/datasets/final/train_mixed.json",
+    "file_name": "/root/autodl-tmp/datasets/final/train_mixed.json",
     "formatting": "sharegpt",
     "columns": {
       "messages": "conversations",
@@ -15,7 +15,7 @@
     }
   },
   "proprietary_only": {
-    "file_name": "/root/autodl-fs/datasets/proprietary/converted/proprietary_nsfw.json",
+    "file_name": "/root/autodl-tmp/datasets/proprietary_converted/proprietary_nsfw.json",
     "formatting": "sharegpt",
     "columns": {
       "messages": "conversations",
@@ -30,7 +30,7 @@
     }
   },
   "general_only": {
-    "file_name": "/root/autodl-fs/datasets/general/converted/general_zh_mixed.json",
+"file_name": "/root/autodl-tmp/datasets/general/converted/general_zh_mixed.json",
     "formatting": "sharegpt",
     "columns": {
       "messages": "conversations",

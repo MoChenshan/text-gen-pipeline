@@ -9,7 +9,7 @@ set -e
 
 # ---- 默认配置 ----
 PORT=${1:-6006}
-MODEL_PATH=${2:-"/root/autodl-fs/outputs/qwen3.6-27b-merged"}
+MODEL_PATH=${2:-"/root/autodl-tmp/outputs/qwen3.6-27b-merged"}
 MAX_MODEL_LEN=8192
 GPU_MEMORY_UTILIZATION=0.90
 
@@ -62,7 +62,7 @@ tmux new-session -d -s vllm "python -m vllm.entrypoints.openai.api_server \
     --host 0.0.0.0 \
     --port ${PORT} \
     --trust-remote-code \
-    2>&1 | tee /root/autodl-fs/outputs/vllm_server.log"
+2>&1 | tee /root/autodl-tmp/outputs/vllm_server.log"
 
 echo "=========================================="
 echo "  vLLM 服务已在后台启动!"
@@ -70,7 +70,7 @@ echo "=========================================="
 echo ""
 echo "常用命令:"
 echo "  查看服务: tmux attach -t vllm"
-echo "  查看日志: tail -f /root/autodl-fs/outputs/vllm_server.log"
+echo "  查看日志: tail -f /root/autodl-tmp/outputs/vllm_server.log"
 echo "  停止服务: tmux kill-session -t vllm"
 echo ""
 echo "AutoDL 端口映射:"

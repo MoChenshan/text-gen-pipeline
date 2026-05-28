@@ -102,10 +102,10 @@ def main():
                         default="/root/autodl-tmp/models/Qwen3.6-27B",
                         help="基座模型路径")
     parser.add_argument("--lora_path", type=str,
-                        default="/root/autodl-fs/outputs/qwen3.6-27b-lora",
+default="/root/autodl-tmp/outputs/qwen3.6-27b-lora",
                         help="LoRA 权重路径")
     parser.add_argument("--output_path", type=str,
-                        default="/root/autodl-fs/outputs/qwen3.6-27b-merged",
+default="/root/autodl-tmp/outputs/qwen3.6-27b-merged",
                         help="合并后模型输出路径")
     parser.add_argument("--method", type=str, choices=["llamafactory", "manual"],
                         default="llamafactory",

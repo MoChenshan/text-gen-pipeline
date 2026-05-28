@@ -16,7 +16,7 @@ LLaMA-Factory ShareGPT 格式:
     python convert_general_datasets.py
 
 输出:
-    /root/autodl-fs/datasets/general/converted/ 目录下的转换后文件
+/root/autodl-tmp/datasets/general/converted/ 目录下的转换后文件
 """
 
 import os
@@ -26,8 +26,8 @@ from pathlib import Path
 from typing import List, Dict
 
 # ---- 路径配置 ----
-GENERAL_DATASET_DIR = "/root/autodl-fs/datasets/general"
-OUTPUT_DIR = "/root/autodl-fs/datasets/general/converted"
+GENERAL_DATASET_DIR = "/root/autodl-tmp/datasets/general"
+OUTPUT_DIR = "/root/autodl-tmp/datasets/general/converted"
 
 
 def convert_firefly(input_path: str) -> List[Dict]:

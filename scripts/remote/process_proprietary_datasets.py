@@ -12,7 +12,7 @@
   2. 解析各数据集格式，提取纯文本
   3. 将长文本切分为"续写对"（prefix → continuation）
   4. 转换为 LLaMA-Factory ShareGPT 格式
-  5. 输出到 /root/autodl-fs/datasets/proprietary/converted/
+5. 输出到 /root/autodl-tmp/datasets/proprietary_converted/
 
 使用方法（在远端 AutoDL 执行）:
     python process_proprietary_datasets.py [--max_samples 50000] [--chunk_size 2048]
@@ -39,7 +39,7 @@ from pathlib import Path
 from typing import List, Dict, Tuple, Optional
 
 # ---- 路径配置 ----
-DATASET_DIR = "/root/autodl-fs/datasets/proprietary"
+DATASET_DIR = "/root/autodl-tmp/datasets/proprietary"
 RAW_DIR = os.path.join(DATASET_DIR, "raw")
 # 输出到数据盘 autodl-tmp，避免 autodl-fs 网盘容量限制
 OUTPUT_DIR = "/root/autodl-tmp/datasets/proprietary_converted"

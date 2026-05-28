@@ -18,7 +18,7 @@ REM 请修改为你的 AutoDL SSH 地址
 SET REMOTE_HOST=root@connect.westd.seetacloud.com
 SET REMOTE_PORT=42655
 SET REMOTE_PROJECT_DIR=/root/project/text-gen-pipeline
-SET REMOTE_DATASET_DIR=/root/autodl-fs/datasets/proprietary
+SET REMOTE_DATASET_DIR=/root/autodl-tmp/datasets/proprietary
 
 REM 本地路径
 SET LOCAL_PROJECT_DIR=D:\Project\Python\text-gen-pipeline

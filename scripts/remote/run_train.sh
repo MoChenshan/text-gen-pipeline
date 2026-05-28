@@ -20,7 +20,7 @@ GPU_IDS=${2:-""}
 PROJECT_DIR="/root/project"
 LLAMA_FACTORY_DIR="${PROJECT_DIR}/LLaMA-Factory"
 CONFIG_DIR="${PROJECT_DIR}/text-gen-pipeline/configs"
-OUTPUT_DIR="/root/autodl-fs/outputs"
+OUTPUT_DIR="/root/autodl-tmp/outputs"
 LOG_FILE="${OUTPUT_DIR}/train.log"
 
 # ---- 自动检测 GPU 数量 ----
@@ -62,12 +62,12 @@ if [ ! -d "/root/autodl-tmp/models/Qwen3.6-27B" ]; then
 fi
 
 # 检查训练数据是否存在
-if [ ! -f "/root/autodl-fs/datasets/final/train_mixed.json" ]; then
+if [ ! -f "/root/autodl-tmp/datasets/final/train_mixed.json" ]; then
     echo "错误: 训练数据不存在，请先运行数据准备流程"
     echo "  1. python process_proprietary_datasets.py"
     echo "  2. bash download_general_datasets.sh"
     echo "  3. python convert_general_datasets.py"
-    echo "  4. python mix_datasets.py"
+    echo "  4. python mix_datasets.py --total_samples 300000"
     exit 1
 fi
 

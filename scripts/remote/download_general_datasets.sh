@@ -83,7 +83,7 @@ def download_from_huggingface():
             # COIG-CQIA 有多个子集，选择几个高质量的
             # 可用子集: chinese_traditional, coig_pc, exam, finance, douban,
             #           human_value, logi_qa, ruozhiba, segmentfault, wiki, wikihow, xhs, zhi
-            subsets = ["zhi", "douban", "xhs", "human_value", "ruozhiba", "wiki"]
+            subsets = ["zhihu", "douban", "xhs", "human_value", "ruozhiba", "wiki"]
             all_samples = []
             for subset in subsets:
                 try:

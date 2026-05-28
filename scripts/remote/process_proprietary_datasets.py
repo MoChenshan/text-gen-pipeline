@@ -53,6 +53,16 @@ os.environ["HF_HOME"] = "/root/autodl-tmp/cache/huggingface"
 # 第一部分：数据下载
 # ============================================================
 
+def _check_h_corpus_extracted(ds2_dir: str) -> bool:
+    """检查 h-corpus-2023 是否已经成功解压（有实际文本文件）"""
+    for root, dirs, files in os.walk(ds2_dir):
+        for f in files:
+            if f.endswith(('.txt', '.json', '.jsonl', '.csv')):
+                # 找到至少一个文本文件，说明已解压
+                return True
+    return False
+
+
 def _download_with_aria2c(url: str, output_dir: str, filename: str) -> str:
     """使用 aria2c 多线程下载（速度远快于 Python 单线程）"""
     import subprocess
@@ -121,10 +131,8 @@ def download_datasets(skip_h_corpus: bool = False):
     ds2_dir = os.path.join(RAW_DIR, "h-corpus-2023")
     if skip_h_corpus:
         print(f"[2/3] h-corpus-2023 已跳过（--skip_h_corpus）")
-    elif os.path.exists(ds2_dir) and any(
-        f for f in os.listdir(ds2_dir) if not f.endswith('.zip')
-    ):
-        print(f"[2/3] h-corpus-2023 已存在，跳过")
+    elif os.path.exists(ds2_dir) and _check_h_corpus_extracted(ds2_dir):
+        print(f"[2/3] h-corpus-2023 已解压，跳过")
     else:
         print("[2/3] 下载 h-corpus-2023 (7.18GB，较大)...")
         os.makedirs(ds2_dir, exist_ok=True)

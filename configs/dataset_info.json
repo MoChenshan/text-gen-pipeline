@@ -16,7 +16,7 @@
     }
   },
   "proprietary_only": {
-    "file_name": "/root/autodl-tmp/datasets/proprietary_converted/proprietary_nsfw.json",
+    "file_name": "/root/autodl-tmp/datasets/proprietary_converted/proprietary_nsfw.jsonl",
     "formatting": "sharegpt",
     "columns": {
       "messages": "conversations",

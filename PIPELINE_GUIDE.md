@@ -241,8 +241,9 @@ clean_text(text) 处理:
 | 总样本数 | ~12,950,193 |
 | 续写对 | ~11,750,696 |
 | 对话对 | ~1,199,497 |
-| 输出文件 | `proprietary_nsfw.json` (~118GB) |
+| 输出文件 | `proprietary_nsfw.jsonl` |
 | 输出路径 | `/root/autodl-tmp/datasets/proprietary_converted/` |
+| 输出格式 | JSONL（流式处理，内存友好） |
 
 ---
 

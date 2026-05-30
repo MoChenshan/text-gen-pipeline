@@ -609,6 +609,7 @@ def main():
     print(f"  前缀长度: {args.min_prefix_len} - {args.max_prefix_len}")
     print(f"  续写长度: {args.min_continuation_len} - {args.max_continuation_len}")
     print(f"  滑动步长: {args.stride}")
+    print(f"  模式: 流式处理（低内存占用）")
     print("")
     
     # ---- Step 1: 下载 ----
@@ -618,122 +619,144 @@ def main():
     else:
         print("[Step 1] 跳过下载")
     
-    # ---- Step 2: 提取文本 ----
-    print("\n[Step 2] 提取文本...")
-    all_texts = []
+    # ---- Step 2 & 3: 提取 + 清洗 + 构建训练对（流式处理）----
+    # 不再全部加载到内存，而是逐数据集处理，每篇文本处理完立即写入文件
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    output_path = os.path.join(OUTPUT_DIR, "proprietary_nsfw.jsonl")
     
-    # 数据集 1
+    print("\n[Step 2-4] 流式提取+清洗+构建训练对...")
+    
+    total_continuation_count = 0
+    total_chat_count = 0
+    total_source_texts = 0
+    total_cleaned_texts = 0
+    
+    # 数据集列表
+    datasets = []
     ds1_dir = os.path.join(RAW_DIR, "erotic_literature_collection")
     if os.path.exists(ds1_dir):
-        print(f"\n  处理 Erotic_Literature_Collection...")
-        texts1 = extract_texts_from_erotic_literature(ds1_dir)
-        print(f"  → 提取 {len(texts1)} 篇文本")
-        all_texts.extend(texts1)
-    
-    # 数据集 2
+        datasets.append(("Erotic_Literature_Collection", ds1_dir, "erotic"))
     ds2_dir = os.path.join(RAW_DIR, "h-corpus-2023")
     if os.path.exists(ds2_dir):
-        print(f"\n  处理 h-corpus-2023...")
-        texts2 = extract_texts_from_h_corpus(ds2_dir)
-        print(f"  → 提取 {len(texts2)} 篇文本")
-        all_texts.extend(texts2)
-    
-    # 数据集 3
+        datasets.append(("h-corpus-2023", ds2_dir, "h_corpus"))
     ds3_dir = os.path.join(RAW_DIR, "sex-novel-filtered")
     if os.path.exists(ds3_dir):
-        print(f"\n  处理 Sex-novel-filtered...")
-        texts3 = extract_texts_from_sex_novel(ds3_dir)
-        print(f"  → 提取 {len(texts3)} 篇文本")
-        all_texts.extend(texts3)
+        datasets.append(("Sex-novel-filtered", ds3_dir, "sex_novel"))
     
-    print(f"\n  总计提取: {len(all_texts)} 篇文本")
-    
-    if not all_texts:
-        print("错误: 未提取到任何文本！请检查数据集路径。")
+    if not datasets:
+        print("错误: 未找到任何数据集！请检查数据集路径。")
         sys.exit(1)
     
-    # ---- Step 3: 清洗 ----
-    print("\n[Step 3] 清洗文本...")
-    cleaned_texts = []
-    for text in all_texts:
-        cleaned = clean_text(text)
-        if len(cleaned) > 500:  # 清洗后仍然足够长
-            cleaned_texts.append(cleaned)
+    with open(output_path, "w", encoding="utf-8") as out_f:
+        for ds_name, ds_dir, ds_type in datasets:
+            print(f"\n  处理 {ds_name}...")
+            
+            # 提取文本
+            if ds_type == "erotic":
+                raw_texts = extract_texts_from_erotic_literature(ds_dir)
+            elif ds_type == "h_corpus":
+                raw_texts = extract_texts_from_h_corpus(ds_dir)
+            else:
+                raw_texts = extract_texts_from_sex_novel(ds_dir)
+            
+            total_source_texts += len(raw_texts)
+            print(f"    提取 {len(raw_texts)} 篇文本")
+            
+            ds_continuation_count = 0
+            ds_chat_count = 0
+            ds_cleaned = 0
+            
+            for i, text in enumerate(raw_texts):
+                if (i + 1) % 1000 == 0:
+                    print(f"    进度: {i+1}/{len(raw_texts)} | "
+                          f"续写对: {ds_continuation_count} | 对话对: {ds_chat_count}")
+                
+                # 清洗
+                cleaned = clean_text(text)
+                del text  # 立即释放原始文本
+                if len(cleaned) <= 500:
+                    continue
+                ds_cleaned += 1
+                
+                # 续写对
+                pairs = build_continuation_pairs(
+                    cleaned,
+                    min_prefix_len=args.min_prefix_len,
+                    max_prefix_len=args.max_prefix_len,
+                    min_continuation_len=args.min_continuation_len,
+                    max_continuation_len=args.max_continuation_len,
+                    stride=args.stride,
+                )
+                
+                # 直接转换为 ShareGPT 并写入文件
+                for prefix, continuation in pairs:
+                    prompt_template = random.choice(CONTINUATION_PROMPTS)
+                    user_msg = prompt_template.format(prefix=prefix)
+                    record = {
+                        "conversations": [
+                            {"from": "system", "value": SYSTEM_PROMPT},
+                            {"from": "human", "value": user_msg},
+                            {"from": "gpt", "value": continuation}
+                        ]
+                    }
+                    out_f.write(json.dumps(record, ensure_ascii=False) + "\n")
+                    ds_continuation_count += 1
+                
+                # 对话对
+                if args.include_chat:
+                    chat_pairs = build_chat_pairs(cleaned)
+                    for record in chat_pairs:
+                        out_f.write(json.dumps(record, ensure_ascii=False) + "\n")
+                        ds_chat_count += 1
+                
+                del cleaned  # 释放清洗后文本
+                del pairs
+            
+            total_continuation_count += ds_continuation_count
+            total_chat_count += ds_chat_count
+            total_cleaned_texts += ds_cleaned
+            print(f"    完成: {ds_cleaned} 篇有效文本, "
+                  f"{ds_continuation_count} 续写对, {ds_chat_count} 对话对")
     
-    print(f"  清洗后保留: {len(cleaned_texts)} 篇 (过滤 {len(all_texts) - len(cleaned_texts)} 篇)")
+    print(f"\n  总计: {total_source_texts} 篇原始文本 → "
+          f"{total_cleaned_texts} 篇有效 → "
+          f"{total_continuation_count} 续写对 + {total_chat_count} 对话对")
     
-    # 统计文本长度分布
-    lengths = [len(t) for t in cleaned_texts]
-    print(f"  文本长度: 最短={min(lengths)}, 最长={max(lengths)}, "
-          f"平均={sum(lengths)//len(lengths)}, 中位数={sorted(lengths)[len(lengths)//2]}")
+    # ---- Step 5: 对话对比例调整 & 采样 ----
+    # 如果对话对过多需要采样，或者需要限制总数
+    # 使用两遍扫描法处理 JSONL（内存友好）
+    if args.include_chat and total_chat_count > 0:
+        target_chat_count = int(total_continuation_count * args.chat_ratio / (1 - args.chat_ratio))
+        if total_chat_count > target_chat_count:
+            print(f"\n[Step 5] 调整对话对比例: {total_chat_count} → {target_chat_count}")
+            _resample_chat_pairs(output_path, target_chat_count, total_chat_count)
+            total_chat_count = target_chat_count
     
-    # ---- Step 4: 构建训练对 ----
-    print("\n[Step 4] 构建训练对...")
-    all_continuation_pairs = []
-    all_chat_pairs = []
+    if args.max_samples:
+        total_all = total_continuation_count + total_chat_count
+        if total_all > args.max_samples:
+            print(f"\n[Step 5] 采样: {total_all} → {args.max_samples}")
+            _random_sample_jsonl(output_path, args.max_samples)
+            total_continuation_count = -1  # 采样后不再区分
+            total_chat_count = -1
     
-    for i, text in enumerate(cleaned_texts):
-        if (i + 1) % 100 == 0:
-            print(f"  处理进度: {i+1}/{len(cleaned_texts)}")
-        
-        # 续写对
-        pairs = build_continuation_pairs(
-            text,
-            min_prefix_len=args.min_prefix_len,
-            max_prefix_len=args.max_prefix_len,
-            min_continuation_len=args.min_continuation_len,
-            max_continuation_len=args.max_continuation_len,
-            stride=args.stride,
-        )
-        all_continuation_pairs.extend(pairs)
-        
-        # 对话式训练对
-        if args.include_chat:
-            chat_pairs = build_chat_pairs(text)
-            all_chat_pairs.extend(chat_pairs)
+    # ---- Step 6: 打乱 JSONL 行序 ----
+    print("\n[Step 6] 打乱数据顺序...")
+    _shuffle_jsonl(output_path)
     
-    print(f"  续写对: {len(all_continuation_pairs)} 条")
-    print(f"  对话对: {len(all_chat_pairs)} 条")
+    # ---- Step 7: 保存统计信息 ----
+    # 统计最终行数
+    final_count = 0
+    with open(output_path, "r", encoding="utf-8") as f:
+        for _ in f:
+            final_count += 1
     
-    # ---- Step 5: 转换格式并混合 ----
-    print("\n[Step 5] 转换为 ShareGPT 格式...")
-    
-    # 转换续写对
-    continuation_data = pairs_to_sharegpt(all_continuation_pairs)
-    
-    # 合并
-    all_data = continuation_data + all_chat_pairs
-    
-    # 控制对话对比例
-    if args.include_chat and all_chat_pairs:
-        target_chat_count = int(len(continuation_data) * args.chat_ratio / (1 - args.chat_ratio))
-        if len(all_chat_pairs) > target_chat_count:
-            sampled_chat = random.sample(all_chat_pairs, target_chat_count)
-            all_data = continuation_data + sampled_chat
-        print(f"  对话对采样: {min(len(all_chat_pairs), target_chat_count)} 条")
-    
-    # 限制总数
-    if args.max_samples and len(all_data) > args.max_samples:
-        all_data = random.sample(all_data, args.max_samples)
-        print(f"  采样到 {args.max_samples} 条")
-    
-    # 打乱
-    random.shuffle(all_data)
-    
-    # ---- Step 6: 保存 ----
-    print("\n[Step 6] 保存...")
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
-    
-    output_path = os.path.join(OUTPUT_DIR, "proprietary_nsfw.json")
-    with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(all_data, f, ensure_ascii=False, indent=2)
-    
-    # 保存统计信息
     stats = {
-        "total_samples": len(all_data),
-        "continuation_pairs": len(continuation_data),
-        "chat_pairs": len(all_data) - len(continuation_data),
-        "source_texts": len(cleaned_texts),
+        "total_samples": final_count,
+        "continuation_pairs": total_continuation_count if total_continuation_count >= 0 else "sampled",
+        "chat_pairs": total_chat_count if total_chat_count >= 0 else "sampled",
+        "source_texts": total_source_texts,
+        "cleaned_texts": total_cleaned_texts,
         "params": {
             "min_prefix_len": args.min_prefix_len,
             "max_prefix_len": args.max_prefix_len,
@@ -747,16 +770,111 @@ def main():
     with open(stats_path, "w", encoding="utf-8") as f:
         json.dump(stats, f, ensure_ascii=False, indent=2)
     
+    file_size_mb = os.path.getsize(output_path) / 1024 / 1024
     print(f"\n{'=' * 60}")
     print(f"  处理完成!")
     print(f"{'=' * 60}")
     print(f"  输出文件: {output_path}")
     print(f"  统计信息: {stats_path}")
-    print(f"  总样本数: {len(all_data)}")
-    print(f"    - 续写对: {len(continuation_data)}")
-    print(f"    - 对话对: {len(all_data) - len(continuation_data)}")
-    print(f"  文件大小: {os.path.getsize(output_path) / 1024 / 1024:.1f} MB")
+    print(f"  总样本数: {final_count}")
+    print(f"  文件大小: {file_size_mb:.1f} MB")
     print(f"\n  下一步: 运行 mix_datasets.py 混合通用数据集")
+
+
+def _resample_chat_pairs(jsonl_path: str, target_count: int, total_chat_count: int):
+    """
+    对 JSONL 中的对话对进行下采样（保留所有续写对）
+    使用两遍扫描避免全部加载到内存
+    """
+    # Pass 1: 找出所有对话对的行号
+    chat_line_indices = []
+    with open(jsonl_path, "r", encoding="utf-8") as f:
+        for i, line in enumerate(f):
+            try:
+                record = json.loads(line)
+                convs = record.get("conversations", [])
+                # 对话对的 human 消息不以续写指令开头
+                if convs and len(convs) >= 2:
+                    human_msg = convs[1].get("value", "")
+                    # 续写对的 human 消息包含 {prefix} 占位内容（较长）
+                    # 对话对更短，且以特定指令开头
+                    for prompt_prefix in ["请根据以下开头续写", "继续写下去：\n\n"] + CONTINUATION_PROMPTS:
+                        if human_msg.startswith(prompt_prefix.split("{")[0]):
+                            break
+                    else:
+                        chat_line_indices.append(i)
+            except:
+                pass
+    
+    if len(chat_line_indices) <= target_count:
+        return
+    
+    # 随机选择要保留的对话对行号
+    keep_indices = set(random.sample(chat_line_indices, target_count))
+    remove_indices = set(chat_line_indices) - keep_indices
+    
+    # Pass 2: 重写文件，跳过被移除的对话对
+    tmp_path = jsonl_path + ".tmp"
+    with open(jsonl_path, "r", encoding="utf-8") as fin, \
+         open(tmp_path, "w", encoding="utf-8") as fout:
+        for i, line in enumerate(fin):
+            if i not in remove_indices:
+                fout.write(line)
+    
+    os.replace(tmp_path, jsonl_path)
+    print(f"    对话对: {total_chat_count} → {target_count}")
+
+
+def _random_sample_jsonl(jsonl_path: str, target_count: int):
+    """从 JSONL 文件中随机采样指定行数"""
+    import tempfile
+    
+    # Pass 1: 统计总行数
+    total_lines = 0
+    with open(jsonl_path, "r", encoding="utf-8") as f:
+        for _ in f:
+            total_lines += 1
+    
+    if total_lines <= target_count:
+        return
+    
+    # 随机选择要保留的行号
+    keep_indices = set(random.sample(range(total_lines), target_count))
+    
+    # Pass 2: 只写入选中的行
+    tmp_path = jsonl_path + ".tmp"
+    with open(jsonl_path, "r", encoding="utf-8") as fin, \
+         open(tmp_path, "w", encoding="utf-8") as fout:
+        for i, line in enumerate(fin):
+            if i in keep_indices:
+                fout.write(line)
+    
+    os.replace(tmp_path, jsonl_path)
+
+
+def _shuffle_jsonl(jsonl_path: str):
+    """打乱 JSONL 文件行序（使用临时文件，内存友好）"""
+    # 读取所有行的偏移量
+    offsets = []
+    with open(jsonl_path, "rb") as f:
+        offset = 0
+        for line in f:
+            offsets.append(offset)
+            offset += len(line)
+    
+    # 随机打乱偏移量
+    random.shuffle(offsets)
+    
+    # 按打乱后的顺序重写文件
+    tmp_path = jsonl_path + ".shuffled"
+    with open(jsonl_path, "rb") as fin, \
+         open(tmp_path, "wb") as fout:
+        for offset in offsets:
+            fin.seek(offset)
+            line = fin.readline()
+            fout.write(line)
+    
+    os.replace(tmp_path, jsonl_path)
 
 
 if __name__ == "__main__":

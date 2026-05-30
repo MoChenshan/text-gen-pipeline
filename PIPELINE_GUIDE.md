@@ -446,7 +446,7 @@ bash scripts/remote/run_train.sh 2
 | **有效 batch size** | **32** | = 1 × 16 × 2 GPUs |
 | `learning_rate` | 5e-4 | 学习率（续训时需较高LR打破安全对齐） |
 | `num_train_epochs` | 1.0 | 训练轮数 |
-| `lr_scheduler_type` | cosine | 余弦退火学习率调度 |
+| `lr_scheduler_type` | constant_with_warmup | 续训用恒定学习率，避免cosine衰减到0 |
 | `warmup_steps` | 50 | 学习率预热步数 |
 | `bf16` | true | BFloat16 混合精度训练 |
 | `optim` | adamw_torch | PyTorch 原生 AdamW 优化器 |

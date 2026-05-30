@@ -40,21 +40,24 @@ lora_target: all
 deepspeed: /root/project/text-gen-pipeline/configs/ds_z2_config.json
 
 ### 数据集配置 ###
+# Base 模型无安全对齐，50k 高质量样本 1 epoch 足够学会续写风格
+# 过多数据浪费训练时间，效果未必更好
 dataset: train_mixed
 template: qwen3_nothink
 cutoff_len: 4096
-max_samples: 100000
+max_samples: 50000
 val_size: 0.02
 overwrite_cache: true
 preprocessing_num_workers: 16
 
 ### 训练超参数 ###
-# Base 模型无安全对齐，不需要高 LR 硬冲，正常微调即可
-# 2卡: batch=2, accum=8, 有效batch=2×8×2=32
-per_device_train_batch_size: 2
-gradient_accumulation_steps: 8
+# Base 模型无安全对齐，1 epoch 即可收敛
+# 2卡: batch=4, accum=4, 有效batch=4×4×2=32
+# 96GB 显卡有大量余量（估算仅占 ~50GB），可放心增大 batch
+per_device_train_batch_size: 4
+gradient_accumulation_steps: 4
 learning_rate: 1.5e-4
-num_train_epochs: 3.0
+num_train_epochs: 1.0
 lr_scheduler_type: cosine
 warmup_ratio: 0.05
 bf16: true
@@ -71,7 +74,7 @@ save_total_limit: 3
 plot_loss: true
 
 ### 评估配置 ###
-per_device_eval_batch_size: 2
+per_device_eval_batch_size: 4
 eval_strategy: steps
 eval_steps: 500
 

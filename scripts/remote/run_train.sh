@@ -7,7 +7,9 @@
 #   bash run_train.sh           # 自动检测 GPU 数量
 #   bash run_train.sh 1         # 强制单卡训练
 #   bash run_train.sh 2         # 强制双卡训练
-#   bash run_train.sh 2 0,1     # 指定使用 GPU 0 和 1
+#   bash run_train.sh 4         # 强制4卡训练
+#   bash run_train.sh 6         # 强制6卡训练
+#   bash run_train.sh 4 0,1,2,3 # 指定使用 GPU
 # ============================================================
 
 set -e
@@ -38,13 +40,29 @@ if [ ${NUM_GPUS} -gt ${AVAILABLE_GPUS} ]; then
 fi
 
 # ---- 选择训练配置 ----
-if [ ${NUM_GPUS} -eq 1 ]; then
-    TRAIN_CONFIG="${CONFIG_DIR}/qwen3.6_27b_lora_sft.yaml"
-    TRAIN_MODE="单卡训练"
-else
-    TRAIN_CONFIG="${CONFIG_DIR}/qwen3.6_27b_lora_sft_2gpu.yaml"
-    TRAIN_MODE="多卡训练 (${NUM_GPUS} GPUs, DeepSpeed ZeRO-2)"
-fi
+case ${NUM_GPUS} in
+    1)
+        TRAIN_CONFIG="${CONFIG_DIR}/qwen3.6_27b_lora_sft.yaml"
+        TRAIN_MODE="单卡训练"
+        ;;
+    2)
+        TRAIN_CONFIG="${CONFIG_DIR}/qwen3.6_27b_lora_sft_2gpu.yaml"
+        TRAIN_MODE="双卡训练 (DeepSpeed ZeRO-2)"
+        ;;
+    4)
+        TRAIN_CONFIG="${CONFIG_DIR}/qwen3.6_27b_lora_sft_4gpu.yaml"
+        TRAIN_MODE="4卡训练 (DeepSpeed ZeRO-2)"
+        ;;
+    6)
+        TRAIN_CONFIG="${CONFIG_DIR}/qwen3.6_27b_lora_sft_6gpu.yaml"
+        TRAIN_MODE="6卡训练 (DeepSpeed ZeRO-2)"
+        ;;
+    *)
+        TRAIN_CONFIG="${CONFIG_DIR}/qwen3.6_27b_lora_sft_2gpu.yaml"
+        TRAIN_MODE="多卡训练 (${NUM_GPUS} GPUs, DeepSpeed ZeRO-2)"
+        echo "警告: 无专用 ${NUM_GPUS} 卡配置，使用2卡配置（需手动调整 gradient_accumulation_steps）"
+        ;;
+esac
 
 echo "=========================================="
 echo "  启动 Qwen3.6-27B LoRA 训练"
@@ -122,13 +140,15 @@ echo "  训练模式: ${TRAIN_MODE}"
 echo "  模型: Qwen3.6-27B (BF16)"
 echo "  方法: LoRA (rank=64, alpha=128, target=all)"
 echo "  序列长度: 4096"
-if [ ${NUM_GPUS} -eq 1 ]; then
-    echo "  有效Batch Size: 2 × 8 (grad_accum) = 16"
-else
-    echo "  有效Batch Size: 2 × 4 (grad_accum) × ${NUM_GPUS} (GPUs) = $((2 * 4 * NUM_GPUS))"
-fi
-echo "  学习率: 2e-4 (cosine scheduler)"
-echo "  Epochs: 3"
+case ${NUM_GPUS} in
+    1) echo "  有效Batch Size: 2 × 8 (grad_accum) = 16" ;;
+    2) echo "  有效Batch Size: 1 × 16 (grad_accum) × 2 (GPUs) = 32" ;;
+    4) echo "  有效Batch Size: 1 × 8 (grad_accum) × 4 (GPUs) = 32" ;;
+    6) echo "  有效Batch Size: 1 × 6 (grad_accum) × 6 (GPUs) = 36" ;;
+    *) echo "  有效Batch Size: 见配置文件" ;;
+esac
+echo "  学习率: 5e-4 (cosine scheduler)"
+echo "  Epochs: 1"
 echo "  Gradient Checkpointing: 开启"
 echo ""
 

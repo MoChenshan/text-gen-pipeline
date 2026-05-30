@@ -1,12 +1,15 @@
 # ============================================================
-# LLaMA-Factory 训练配置 - Qwen3.6-27B LoRA 微调（多卡版本）
+# LLaMA-Factory 训练配置 - Qwen3.6-27B LoRA 微调（6卡版本）
 # 
-# 适用: 2×RTX PRO 6000 96GB 或其他多卡环境
+# 适用: 6×RTX PRO 6000 96GB 或 6×A100 80GB
 # 使用 DeepSpeed ZeRO-2 进行数据并行
 #
 # 使用方式:
-#   bash run_train.sh 2        # 自动使用此配置
-#   bash run_train.sh 2 0,1    # 指定 GPU
+#   bash run_train.sh 6
+#   bash run_train.sh 6 0,1,2,3,4,5
+#
+# 训练速度估算 (50k样本, 1 epoch):
+#   有效batch=36, ~681步, 每步~20-25秒, 总计~4-5小时
 # ============================================================
 
 ### 模型配置 ### 
@@ -41,9 +44,9 @@ overwrite_cache: true
 preprocessing_num_workers: 16
 
 ### 训练超参数 ###
-# 续训策略: 高学习率打破安全对齐 + 高NSFW比例覆盖拒绝行为
+# 6卡: batch=1, accum=6, 有效batch=1×6×6=36
 per_device_train_batch_size: 1
-gradient_accumulation_steps: 16
+gradient_accumulation_steps: 6
 learning_rate: 5.0e-4
 num_train_epochs: 1.0
 lr_scheduler_type: cosine

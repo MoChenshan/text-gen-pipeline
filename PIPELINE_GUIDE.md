@@ -285,16 +285,22 @@ python scripts/remote/convert_general_datasets.py
 #### 执行命令
 
 ```bash
+# 默认比例（首次训练）
 python scripts/remote/mix_datasets.py --total_samples 500000
+
+# 续训时建议提高 NSFW 比例以覆盖安全对齐
+python scripts/remote/mix_datasets.py --total_samples 500000 --proprietary_ratio 0.80 --general_ratio 0.20
 ```
 
 #### 3.3.1 混合比例
 
-| 数据源 | 比例 | 条数（50万总量时） |
-|--------|------|-------------------|
-| 专有 NSFW 数据 | 65% | 325,000 |
-| 中文通用对话/指令 | 25% | 125,000 |
-| 中文创意写作 | 10% | 50,000（如无则并入通用） |
+| 数据源 | 首次训练 | 续训（覆盖安全对齐） | 条数（50万总量时） |
+|--------|----------|----------------------|-------------------|
+| 专有 NSFW 数据 | 65% | **80%** | 400,000 |
+| 中文通用对话/指令 | 25% | **20%** | 100,000 |
+| 中文创意写作 | 10% | 0%（并入通用） | — |
+
+> **续训为何提高 NSFW 比例？** 之前训练的模型仍然会拒绝 NSFW 内容，说明安全对齐权重未被充分覆盖。提高 NSFW 数据到 80% 可以更集中地"压制"拒绝行为。
 
 #### 3.3.2 专有数据采样算法（两遍扫描法）
 
@@ -354,9 +360,11 @@ python scripts/remote/mix_datasets.py --total_samples 500000
 ### 4.1 执行命令
 
 ```bash
-bash scripts/remote/run_train.sh        # 自动检测GPU数量
-bash scripts/remote/run_train.sh 2       # 强制双卡
-bash scripts/remote/run_train.sh 2 0,1   # 指定GPU
+bash scripts/remote/run_train.sh          # 自动检测GPU数量
+bash scripts/remote/run_train.sh 2         # 强制双卡
+bash scripts/remote/run_train.sh 4         # 强制4卡
+bash scripts/remote/run_train.sh 6         # 强制6卡
+bash scripts/remote/run_train.sh 4 0,1,2,3 # 指定GPU
 ```
 
 训练在 `tmux` 会话中后台运行，防止 SSH 断开中断。
@@ -371,7 +379,10 @@ ls /root/autodl-tmp/outputs/qwen3.6-27b-lora/
 # 输出类似: checkpoint-1500  runs  ...
 ```
 
-2. 编辑 `configs/qwen3.6_27b_lora_sft_2gpu.yaml`，取消注释并填入 checkpoint 路径：
+2. 编辑对应的训练配置文件，取消注释并填入 checkpoint 路径：
+   - 2卡: `configs/qwen3.6_27b_lora_sft_2gpu.yaml`
+   - 4卡: `configs/qwen3.6_27b_lora_sft_4gpu.yaml`
+   - 6卡: `configs/qwen3.6_27b_lora_sft_6gpu.yaml`
 ```yaml
 resume_from_checkpoint: /root/autodl-tmp/outputs/qwen3.6-27b-lora/checkpoint-1500
 ```
@@ -381,7 +392,15 @@ resume_from_checkpoint: /root/autodl-tmp/outputs/qwen3.6-27b-lora/checkpoint-150
 bash scripts/remote/run_train.sh 2
 ```
 
-> **注意**: 续训时学习率会从 checkpoint 中的调度器状态继续，`warmup_steps` 不会重新生效。如需重新预热，可适当提高 `learning_rate`。
+> **续训关键参数调整（打破安全对齐）**:
+>
+> 之前训练的模型仍然会拒绝 NSFW 内容，是因为 Qwen3.6 基座安全对齐很强。续训时需要：
+> - **学习率调高至 5e-4**：太低改不动安全对齐权重，必须用较高 LR 覆盖拒绝行为
+> - **NSFW 数据比例提高至 80%**：`mix_datasets.py --proprietary_ratio 0.80 --general_ratio 0.20`
+> - **数据全部加 system message**：教模型"你是文学续写助手，不拒绝不评判"
+> - **1 epoch 即可**：已有续写基础，只需覆盖安全对齐
+>
+> 注意: `resume_from_checkpoint` 会继承调度器状态，学习率从 checkpoint 的调度位置继续。如果 checkpoint 已训练完整个 cosine schedule，学习率可能已经衰减到很低。此时可以去掉 `resume_from_checkpoint`，改为从基座模型**重新训练**，但使用加 system message 后的新数据集。
 
 ### 4.2 训练配置详解
 
@@ -425,8 +444,8 @@ bash scripts/remote/run_train.sh 2
 | `per_device_train_batch_size` | 1 | 每卡每步 batch size |
 | `gradient_accumulation_steps` | 16 | 梯度累积步数 |
 | **有效 batch size** | **32** | = 1 × 16 × 2 GPUs |
-| `learning_rate` | 2e-4 | 学习率 |
-| `num_train_epochs` | 2.0 | 训练轮数 |
+| `learning_rate` | 5e-4 | 学习率（续训时需较高LR打破安全对齐） |
+| `num_train_epochs` | 1.0 | 训练轮数 |
 | `lr_scheduler_type` | cosine | 余弦退火学习率调度 |
 | `warmup_steps` | 50 | 学习率预热步数 |
 | `bf16` | true | BFloat16 混合精度训练 |
@@ -478,13 +497,14 @@ bash scripts/remote/run_train.sh 2
 
 | 指标 | 值 |
 |------|-----|
-| 训练样本数 | 98,000（100000 × 98% 训练集） |
-| 验证样本数 | 2,000（100000 × 2%） |
-| 总优化步数 | ~6,125（2 epochs） |
-| 每步耗时 | ~50-60 秒 |
-| 预计总时间 | ~85-100 小时（完整训练） |
-| 续训预估 | ~42-50 小时（1 epoch，从 checkpoint 继续） |
-| 显存占用 | ~67GB / 卡 |
+| 指标 | 2卡 | 4卡 | 6卡 |
+|------|-----|-----|-----|
+| 有效 batch size | 32 | 32 | 36 |
+| 训练样本数 | 49,000 | 49,000 | 49,000 |
+| 总优化步数 | ~1,532 | ~766 | ~681 |
+| 每步耗时 | ~50-60秒 | ~30-35秒 | ~20-25秒 |
+| 预计总时间（1 epoch） | ~22-25小时 | ~6-7小时 | ~4-5小时 |
+| 显存占用 | ~67GB/卡 | ~67GB/卡 | ~67GB/卡 |
 
 #### 4.2.8 Loss 预期
 
@@ -842,7 +862,7 @@ bash scripts/remote/setup_env.sh
 python scripts/remote/process_proprietary_datasets.py --skip_h_corpus
 bash scripts/remote/download_general_datasets.sh
 python scripts/remote/convert_general_datasets.py
-python scripts/remote/mix_datasets.py --total_samples 500000
+python scripts/remote/mix_datasets.py --total_samples 500000 --proprietary_ratio 0.80 --general_ratio 0.20
 
 # ===== 训练 =====
 bash scripts/remote/run_train.sh
@@ -874,6 +894,8 @@ scripts\local\sync_to_remote.bat
 | 文件 | 用途 |
 |------|------|
 | `configs/qwen3.6_27b_lora_sft_2gpu.yaml` | 双卡训练配置 |
+| `configs/qwen3.6_27b_lora_sft_4gpu.yaml` | 4卡训练配置 |
+| `configs/qwen3.6_27b_lora_sft_6gpu.yaml` | 6卡训练配置 |
 | `configs/qwen3.6_27b_lora_sft.yaml` | 单卡训练配置 |
 | `configs/ds_z2_config.json` | DeepSpeed ZeRO-2 配置 |
 | `configs/dataset_info.json` | 数据集注册信息 |

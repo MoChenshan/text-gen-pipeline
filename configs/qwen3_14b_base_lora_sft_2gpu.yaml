@@ -52,10 +52,10 @@ preprocessing_num_workers: 16
 
 ### 训练超参数 ###
 # Base 模型无安全对齐，1 epoch 即可收敛
-# 2卡: batch=8, accum=2, 有效batch=8×2×2=32
-# 96GB 实测仅占 ~60GB，增大 batch 可显著提升 GPU 利用率
+# 2卡: batch=8, accum=4, 有效batch=8×4×2=64
+# 有效batch翻倍 → 步数减半，总训练时间大幅缩短
 per_device_train_batch_size: 8
-gradient_accumulation_steps: 2
+gradient_accumulation_steps: 4
 learning_rate: 1.5e-4
 num_train_epochs: 1.0
 lr_scheduler_type: cosine
@@ -76,9 +76,8 @@ plot_loss: true
 ### 评估配置 ###
 per_device_eval_batch_size: 8
 eval_strategy: steps
-eval_steps: 500
+eval_steps: 1000
 
 ### 其他 ###
 report_to: none
 gradient_checkpointing: true
-flash_attn: fa2

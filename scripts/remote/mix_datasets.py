@@ -43,23 +43,23 @@ SYSTEM_PROMPT = (
 
 
 
-def stream_sample_large_json(filepath: str, sample_count: int, seed: int = 42) -> List[Dict]:
+def stream_sample_large_jsonl(filepath: str, sample_count: int, seed: int = 42) -> List[Dict]:
     """
-    从大型 JSON 数组文件中高效随机采样（两遍扫描法）
+    从大型 JSONL 文件中高效随机采样（两遍扫描法）
     
     原理：
-    - 文件由 json.dump(..., indent=2) 生成，每个顶层对象以 "  {" 开头
-    - 第一遍：快速扫描记录每个条目的文件字节偏移（只看行首模式，极快）
-    - 随机选择要采样的索引
-    - 第二遍：只 seek 到选中的位置，解析对应条目
+    - JSONL 每行一个 JSON 对象
+    - 第一遍：快速扫描记录每行的字节偏移
+    - 随机选择要采样的行索引
+    - 第二遍：只 seek 到选中的位置，解析对应行
     """
     import time
     print(f"    流式采样 {sample_count} 条 from {os.path.basename(filepath)}...")
     
     rng = random.Random(seed)
     
-    # ---- 第一遍：快速扫描，记录每个顶层对象的字节偏移 ----
-    print(f"      [Pass 1] 扫描条目偏移...")
+    # ---- 第一遍：快速扫描，记录每行的字节偏移 ----
+    print(f"      [Pass 1] 扫描行偏移...")
     t0 = time.time()
     offsets = []
     
@@ -69,9 +69,7 @@ def stream_sample_large_json(filepath: str, sample_count: int, seed: int = 42) -
             line = f.readline()
             if not line:
                 break
-            # 顶层对象以 "  {" 开头（2空格 + 左花括号）
-            # indent=2 格式下，顶层对象的起始行固定是 "  {\n"
-            if line.startswith(b'  {'):
+            if line.strip():  # 跳过空行
                 offsets.append(pos)
     
     total_count = len(offsets)
@@ -87,46 +85,19 @@ def stream_sample_large_json(filepath: str, sample_count: int, seed: int = 42) -
     selected_indices = sorted(rng.sample(range(total_count), actual_sample))
     print(f"      [采样] 从 {total_count} 条中随机选择 {actual_sample} 条")
     
-    # ---- 第二遍：只解析选中的条目 ----
-    print(f"      [Pass 2] 解析选中条目...")
+    # ---- 第二遍：只解析选中的行 ----
+    print(f"      [Pass 2] 解析选中行...")
     t0 = time.time()
     results = []
     
     with open(filepath, "r", encoding="utf-8") as f:
         for idx_num, idx in enumerate(selected_indices):
-            # seek 到条目起始位置
             f.seek(offsets[idx])
-            
-            # 读取该条目的所有行，直到遇到下一个顶层结束
-            lines = []
-            depth = 0
-            first_line = True
-            while True:
-                line = f.readline()
-                if not line:
-                    break
-                lines.append(line)
-                
-                # 简单跟踪花括号深度（不在字符串内的）
-                # 对于 indent=2 格式，顶层对象结束行是 "  }" 或 "  },"
-                if first_line:
-                    depth = 1
-                    first_line = False
-                    continue
-                
-                stripped = line.strip()
-                if stripped in ('}', '},'):
-                    # 检查缩进：顶层对象的结束 "}" 缩进为 2 空格
-                    if line.startswith('  }') and not line.startswith('    '):
-                        break
-            
-            # 解析 JSON 对象
-            text = ''.join(lines).strip().rstrip(',')
+            line = f.readline()
             try:
-                item = json.loads(text)
+                item = json.loads(line)
                 results.append(item)
             except json.JSONDecodeError:
-                # 如果简单方法失败，尝试更宽松的解析
                 pass
             
             if (idx_num + 1) % 50000 == 0:
@@ -226,7 +197,7 @@ def main():
     
     # ---- 加载专有数据集（流式采样，不全部加载） ----
     print("[1/3] 采样专有数据集（流式）...")
-    proprietary_file = os.path.join(PROPRIETARY_DIR, "proprietary_nsfw.json")
+    proprietary_file = os.path.join(PROPRIETARY_DIR, "proprietary_nsfw.jsonl")
     if not os.path.exists(proprietary_file):
         print(f"  错误: 专有数据集不存在: {proprietary_file}")
         print(f"  请先运行 process_proprietary_datasets.py")
@@ -235,7 +206,7 @@ def main():
     file_size_gb = os.path.getsize(proprietary_file) / 1024**3
     print(f"    文件大小: {file_size_gb:.1f} GB")
     
-    proprietary_data = stream_sample_large_json(
+    proprietary_data = stream_sample_large_jsonl(
         proprietary_file, proprietary_count, seed=args.seed
     )
     print(f"  ✓ 专有数据采样完成: {len(proprietary_data)} 条\n")

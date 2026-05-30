@@ -10,6 +10,7 @@
     "tags": {
       "role_tag": "from",
       "content_tag": "value",
+      "system_tag": "system",
       "user_tag": "human",
       "assistant_tag": "gpt"
     }
@@ -25,6 +26,7 @@
     "tags": {
       "role_tag": "from",
       "content_tag": "value",
+      "system_tag": "system",
       "user_tag": "human",
       "assistant_tag": "gpt"
     }
@@ -40,6 +42,7 @@
     "tags": {
       "role_tag": "from",
       "content_tag": "value",
+      "system_tag": "system",
       "user_tag": "human",
       "assistant_tag": "gpt"
     }

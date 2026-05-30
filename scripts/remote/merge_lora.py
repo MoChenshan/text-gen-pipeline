@@ -7,8 +7,33 @@ LoRA 权重合并脚本
 """
 
 import os
+import sys
+import subprocess
+import shutil
 import argparse
 from pathlib import Path
+
+# LLaMA-Factory CLI 默认路径（conda 环境）
+LLAMAFACTORY_CLI_DEFAULT = "/root/miniconda3/envs/llama_factory/bin/llamafactory-cli"
+
+
+def find_llamafactory_cli() -> str:
+    """查找 llamafactory-cli 可执行文件"""
+    # 优先使用环境变量
+    env_path = os.environ.get("LLAMAFACTORY_CLI")
+    if env_path and os.path.isfile(env_path):
+        return env_path
+    
+    # 尝试 PATH 中查找
+    cli_in_path = shutil.which("llamafactory-cli")
+    if cli_in_path:
+        return cli_in_path
+    
+    # 使用默认 conda 环境路径
+    if os.path.isfile(LLAMAFACTORY_CLI_DEFAULT):
+        return LLAMAFACTORY_CLI_DEFAULT
+    
+    return None
 
 
 def merge_lora(
@@ -22,6 +47,16 @@ def merge_lora(
     """
     import json
     import tempfile
+    
+    # 查找 llamafactory-cli
+    cli_path = find_llamafactory_cli()
+    if cli_path is None:
+        print("错误: 找不到 llamafactory-cli!")
+        print("请确保已激活 conda 环境: conda activate llama_factory")
+        print(f"或设置环境变量: export LLAMAFACTORY_CLI=/path/to/llamafactory-cli")
+        sys.exit(1)
+    
+    print(f"使用 CLI: {cli_path}")
     
     # 构建 LLaMA-Factory 导出配置
     export_config = {
@@ -49,11 +84,15 @@ def merge_lora(
     print(f"合并配置: {json.dumps(export_config, indent=2, ensure_ascii=False)}")
     print(f"临时配置文件: {config_path}")
     
-    # 调用 LLaMA-Factory 导出
-    os.system(f"llamafactory-cli export {config_path}")
+    # 调用 LLaMA-Factory 导出（检查返回码）
+    ret = subprocess.run([cli_path, "export", config_path])
     
     # 清理临时文件
     os.unlink(config_path)
+    
+    if ret.returncode != 0:
+        print(f"\n错误: 合并失败! 返回码: {ret.returncode}")
+        sys.exit(1)
     
     print(f"\n合并完成! 输出路径: {output_path}")
 

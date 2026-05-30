@@ -47,6 +47,7 @@ def merge_lora(
     """
     import json
     import tempfile
+    import yaml
     
     # 查找 llamafactory-cli
     cli_path = find_llamafactory_cli()
@@ -76,9 +77,9 @@ def merge_lora(
     elif export_dtype == "fp16":
         export_config["fp16"] = True
     
-    # 写入临时配置文件
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-        json.dump(export_config, f, indent=2)
+    # 写入临时 YAML 配置文件（LLaMA-Factory 对 YAML 解析更稳定）
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+        yaml.dump(export_config, f, default_flow_style=False, allow_unicode=True)
         config_path = f.name
     
     print(f"合并配置: {json.dumps(export_config, indent=2, ensure_ascii=False)}")

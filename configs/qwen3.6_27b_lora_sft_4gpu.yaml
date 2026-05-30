@@ -35,8 +35,8 @@ resume_from_checkpoint: /root/autodl-tmp/outputs/qwen3.6-27b-lora/checkpoint-153
 
 ### 数据集配置 ###
 dataset: train_mixed
-template: qwen3
-cutoff_len: 4096
+template: qwen3_6
+cutoff_len: 8192
 max_samples: 50000
 val_size: 0.02
 overwrite_cache: true

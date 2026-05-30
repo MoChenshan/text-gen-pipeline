@@ -71,11 +71,8 @@ def merge_lora(
         "export_legacy_format": False,
     }
     
-    # 设置导出精度
-    if export_dtype == "bf16":
-        export_config["bf16"] = True
-    elif export_dtype == "fp16":
-        export_config["fp16"] = True
+    # 设置导出精度（export 命令使用 export_dtype 参数）
+    export_config["export_dtype"] = export_dtype
     
     # 写入临时 YAML 配置文件（LLaMA-Factory 对 YAML 解析更稳定）
     with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:

@@ -740,9 +740,8 @@ def main():
             total_continuation_count = -1  # 采样后不再区分
             total_chat_count = -1
     
-    # ---- Step 6: 打乱 JSONL 行序 ----
-    print("\n[Step 6] 打乱数据顺序...")
-    _shuffle_jsonl(output_path)
+    # ---- Step 6: 跳过打乱（后续 mix_datasets.py 采样时会随机选取，无需此步）----
+    print("\n[Step 6] 跳过打乱（mix_datasets.py 会随机采样，无需预先打乱）")
     
     # ---- Step 7: 保存统计信息 ----
     # 统计最终行数

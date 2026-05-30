@@ -2,7 +2,7 @@
 基于 transformers 的 OpenAI 兼容 API 服务
 ============================================
 用途: 当 vLLM/SGLang 不兼容 Qwen3.6 架构时，使用 transformers 原生推理
-功能: 提供 /v1/chat/completions 和 /v1/models 端点
+功能: 提供 /v1/chat/completions、/v1/completions 和 /v1/models 端点
 使用: python serve_transformers.py [--model-path PATH] [--port PORT]
 """
 
@@ -87,6 +87,37 @@ class StreamResponse(BaseModel):
     choices: List[StreamChoice]
 
 
+# ---- 文本补全请求/响应模型 ----
+
+class CompletionRequest(BaseModel):
+    model: str = MODEL_NAME
+    prompt: str
+    max_tokens: Optional[int] = 2048
+    temperature: Optional[float] = 0.8
+    top_p: Optional[float] = 0.9
+    top_k: Optional[int] = 20
+    stream: Optional[bool] = False
+    presence_penalty: Optional[float] = 0.0
+    frequency_penalty: Optional[float] = 0.0
+    repetition_penalty: Optional[float] = 1.0
+    stop: Optional[List[str]] = None
+
+
+class CompletionChoice(BaseModel):
+    index: int = 0
+    text: str
+    finish_reason: str = "stop"
+
+
+class CompletionResponse(BaseModel):
+    id: str
+    object: str = "text_completion"
+    created: int
+    model: str
+    choices: List[CompletionChoice]
+    usage: Usage
+
+
 # ---- API 端点 ----
 
 @app.get("/v1/models")
@@ -109,6 +140,52 @@ async def list_models():
 async def health_check():
     """健康检查"""
     return {"status": "ok", "model": MODEL_NAME}
+
+
+@app.post("/v1/completions")
+async def completions(request: CompletionRequest):
+    """文本补全接口（续写）"""
+    # 直接使用 prompt 作为输入，不套用 chat template
+    inputs = tokenizer(request.prompt, return_tensors="pt").to(model.device)
+    prompt_tokens = inputs.input_ids.shape[1]
+
+    # 计算 repetition_penalty
+    rep_penalty = request.repetition_penalty
+    if request.presence_penalty and request.presence_penalty > 0:
+        rep_penalty = max(rep_penalty, 1.0 + request.presence_penalty * 0.3)
+
+    # 生成参数
+    gen_kwargs = {
+        **inputs,
+        "max_new_tokens": request.max_tokens,
+        "temperature": request.temperature if request.temperature > 0 else 1.0,
+        "top_p": request.top_p,
+        "top_k": request.top_k,
+        "do_sample": request.temperature > 0,
+        "repetition_penalty": rep_penalty,
+    }
+
+    # 非流式生成
+    with torch.no_grad():
+        outputs = model.generate(**gen_kwargs)
+
+    new_tokens = outputs[0][prompt_tokens:]
+    response_text = tokenizer.decode(new_tokens, skip_special_tokens=True)
+    completion_tokens = len(new_tokens)
+
+    return CompletionResponse(
+        id=f"cmpl-{uuid.uuid4().hex[:12]}",
+        created=int(time.time()),
+        model=MODEL_NAME,
+        choices=[
+            CompletionChoice(text=response_text)
+        ],
+        usage=Usage(
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=prompt_tokens + completion_tokens,
+        ),
+    )
 
 
 @app.post("/v1/chat/completions")

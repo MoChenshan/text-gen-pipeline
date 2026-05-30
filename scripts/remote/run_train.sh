@@ -103,6 +103,9 @@ echo "[准备] 注册数据集..."
 export HF_HOME="/root/autodl-tmp/cache/huggingface"
 mkdir -p ${HF_HOME}/datasets
 
+# 显存碎片优化（减少 "Tried to allocate X GiB" OOM 错误）
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+
 DATASET_INFO_SRC="${CONFIG_DIR}/dataset_info.json"
 DATASET_INFO_DST="${LLAMA_FACTORY_DIR}/data/dataset_info.json"
 

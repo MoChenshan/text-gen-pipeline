@@ -1,14 +1,14 @@
 #!/bin/bash
 # ============================================================
-# 推理服务部署脚本（支持 vLLM 和 SGLang）
+# 推理服务部署脚本（支持 vLLM、SGLang 和 Transformers）
 # 用途: 在 AutoDL 上部署合并后的模型，提供 OpenAI 兼容 API
-# 使用: bash deploy_vllm.sh [sglang|vllm]
+# 使用: bash deploy_vllm.sh [sglang|vllm|transformers]
 # ============================================================
 
 set -e
 
 # ---- 默认配置 ----
-ENGINE=${1:-"sglang"}  # 推理引擎: sglang 或 vllm
+ENGINE=${1:-"transformers"}  # 推理引擎: sglang, vllm 或 transformers
 PORT=6006
 MODEL_PATH="/root/autodl-tmp/outputs/qwen3.6-27b-merged"
 MODEL_NAME="qwen3.6-27b-nsfw"
@@ -84,9 +84,25 @@ elif [ "${ENGINE}" = "vllm" ]; then
         --trust-remote-code \
     2>&1 | tee ${LOG_FILE}"
 
+elif [ "${ENGINE}" = "transformers" ]; then
+    echo "[启动] Transformers 原生推理 API 服务..."
+    echo "  API 地址: http://0.0.0.0:${PORT}/v1"
+    echo "  注意: 吞吐量低于 vLLM/SGLang，但兼容性最好"
+    echo ""
+
+    # 获取脚本所在目录
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+    tmux new-session -d -s inference "python ${SCRIPT_DIR}/serve_transformers.py \
+        --model-path ${MODEL_PATH} \
+        --model-name ${MODEL_NAME} \
+        --port ${PORT} \
+        --host 0.0.0.0 \
+    2>&1 | tee ${LOG_FILE}"
+
 else
     echo "错误: 未知引擎 '${ENGINE}'"
-    echo "支持的引擎: sglang, vllm"
+    echo "支持的引擎: sglang, vllm, transformers"
     exit 1
 fi
 

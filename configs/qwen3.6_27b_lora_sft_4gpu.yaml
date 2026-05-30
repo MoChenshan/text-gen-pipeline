@@ -44,8 +44,8 @@ overwrite_cache: true
 preprocessing_num_workers: 16
 
 ### 训练超参数 ###
-# 4卡: batch=1, accum=8, 有效batch=1×8×4=32
-per_device_train_batch_size: 1
+# 4卡: batch=2, accum=8, 有效batch=2×8×4=64
+per_device_train_batch_size: 2
 gradient_accumulation_steps: 8
 learning_rate: 5.0e-4
 num_train_epochs: 1.0

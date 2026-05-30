@@ -44,8 +44,8 @@ overwrite_cache: true
 preprocessing_num_workers: 16
 
 ### 训练超参数 ###
-# 单卡 96GB: batch_size=2, grad_accum=8, 有效batch=16
-per_device_train_batch_size: 2
+# 单卡 96GB: batch_size=4, grad_accum=8, 有效batch=32
+per_device_train_batch_size: 4
 gradient_accumulation_steps: 8
 learning_rate: 5.0e-4
 num_train_epochs: 1.0

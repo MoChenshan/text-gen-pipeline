@@ -21,7 +21,7 @@ finetuning_type: lora
 ### LoRA 配置 ###
 lora_rank: 64
 lora_alpha: 128
-lora_dropout: 0.05
+lora_dropout: 0.0
 lora_target: all
 
 ### DeepSpeed ###

@@ -145,8 +145,8 @@ default="/root/autodl-tmp/outputs/qwen3.6-27b-lora",
 default="/root/autodl-tmp/outputs/qwen3.6-27b-merged",
                         help="合并后模型输出路径")
     parser.add_argument("--method", type=str, choices=["llamafactory", "manual"],
-                        default="llamafactory",
-                        help="合并方法: llamafactory (推荐) 或 manual")
+                        default="manual",
+                        help="合并方法: manual (推荐，直接用 transformers+peft) 或 llamafactory")
     parser.add_argument("--dtype", type=str, choices=["bf16", "fp16"],
                         default="bf16",
                         help="导出精度")

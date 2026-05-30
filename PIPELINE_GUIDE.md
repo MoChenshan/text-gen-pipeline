@@ -13,7 +13,8 @@
 5. [模型合并](#5-模型合并)
 6. [推理部署](#6-推理部署)
 7. [本地调用与测试](#7-本地调用与测试)
-8. [完整执行顺序](#8-完整执行顺序)
+8. [本地 UI 接入](#8-本地-ui-接入)
+9. [完整执行顺序](#9-完整执行顺序)
 
 ---
 
@@ -517,7 +518,11 @@ model.save_pretrained(output_path, max_shard_size="5GB")
 合并后的完整模型保存在 `/root/autodl-tmp/outputs/qwen3.6-27b-merged/`，包含：
 - 模型权重 (safetensors 分片，每片 ≤ 5GB)
 - tokenizer 文件
-- 模型配置文件
+- 模型配置文件 (`config.json`)
+- 额外配置文件 (`preprocessor_config.json`, `chat_template.jinja` 等)
+
+> **注意**: 合并脚本会自动从基座模型复制额外配置文件，确保合并后的模型与原始模型配置一致。
+> 不要手动修改合并后的 `config.json`，否则可能导致推理引擎加载失败。
 
 ---
 
@@ -526,11 +531,51 @@ model.save_pretrained(output_path, max_shard_size="5GB")
 ### 6.1 执行命令
 
 ```bash
-bash scripts/remote/deploy_vllm.sh [PORT] [MODEL_PATH]
-# 默认: bash deploy_vllm.sh 6006 /root/autodl-tmp/outputs/qwen3.6-27b-merged
+bash scripts/remote/deploy_vllm.sh [ENGINE]
+# ENGINE 可选: transformers（默认）、vllm、sglang
+# 示例:
+bash scripts/remote/deploy_vllm.sh transformers  # 推荐，兼容性最好
+bash scripts/remote/deploy_vllm.sh vllm           # 高吞吐，需要 vLLM 适配
+bash scripts/remote/deploy_vllm.sh sglang         # 高吞吐，需要 SGLang 适配
 ```
 
-### 6.2 vLLM 服务配置
+### 6.2 推理引擎选择
+
+| 引擎 | 状态 | 吞吐量 | 兼容性 | 说明 |
+|------|------|--------|--------|------|
+| **transformers** | ✅ 可用（当前默认） | 低 | 最好 | 原生 HuggingFace 推理，完美支持 Qwen3.6 混合注意力架构 |
+| **vLLM** | ⚠️ 需适配 | 高 | 有限 | 需要 `--language-model-only` 参数，且需 CUDA ≥ 12.9 |
+| **SGLang** | ⚠️ 需适配 | 高 | 有限 | 需要 `>=0.5.10`，当前不支持 `Qwen3_5ForCausalLM` 架构 |
+
+> **为什么默认使用 transformers？**
+>
+> Qwen3.6-27B 采用混合注意力架构（linear_attention + full_attention），属于较新的模型架构。
+> vLLM 0.22.0 和 SGLang 0.5.12 在加载纯文本合并模型时存在以下问题：
+> - vLLM: `Qwen3_5TextConfig` 缺少 `vision_config` 属性（即使加了 `--language-model-only`）
+> - SGLang: 报 `Qwen3_5ForCausalLM has no SGLang implementation`
+> - 两者都需要 `flash_attn.ops` 模块（需要 CUDA ≥ 12.9）
+>
+> 待 vLLM/SGLang 更新适配后，可切换回高吞吐引擎。
+
+### 6.3 Transformers 引擎配置（当前方案）
+
+脚本: `scripts/remote/serve_transformers.py`
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `--model-path` | `/root/autodl-tmp/outputs/qwen3.6-27b-merged` | 合并后模型路径 |
+| `--model-name` | `qwen3.6-27b-nsfw` | API 中的模型名称 |
+| `--port` | 6006 | 服务端口 |
+| `--host` | 0.0.0.0 | 监听地址 |
+
+**技术实现**:
+- 基于 FastAPI + uvicorn
+- 使用 `AutoModelForCausalLM` + `device_map="auto"` 自动分配 GPU
+- BFloat16 精度推理
+- 支持流式输出（`TextIteratorStreamer`）
+- 关闭 thinking 模式（`enable_thinking=False`）直接输出
+
+### 6.4 vLLM 引擎配置（备选）
 
 | 参数 | 值 | 说明 |
 |------|-----|------|
@@ -539,50 +584,78 @@ bash scripts/remote/deploy_vllm.sh [PORT] [MODEL_PATH]
 | `--dtype` | bfloat16 | 推理精度 |
 | `--max-model-len` | 8192 | 最大上下文长度 |
 | `--gpu-memory-utilization` | 0.90 | GPU 显存利用率上限 |
-| `--host` | 0.0.0.0 | 监听所有网络接口 |
-| `--port` | 6006 | 服务端口 |
+| `--language-model-only` | - | 跳过视觉编码器（纯文本推理必须） |
+| `--reasoning-parser` | qwen3 | 支持 thinking 模式解析 |
 | `--trust-remote-code` | - | 信任远程代码 |
 
-### 6.3 API 接口
+### 6.5 SGLang 引擎配置（备选）
+
+| 参数 | 值 | 说明 |
+|------|-----|------|
+| `--model-path` | `/root/autodl-tmp/outputs/qwen3.6-27b-merged` | 模型路径 |
+| `--served-model-name` | `qwen3.6-27b-nsfw` | API 中的模型名称 |
+| `--dtype` | bfloat16 | 推理精度 |
+| `--context-length` | 8192 | 最大上下文长度 |
+| `--mem-fraction-static` | 0.90 | GPU 显存静态分配比例 |
+| `--reasoning-parser` | qwen3 | 支持 thinking 模式解析 |
+| `--trust-remote-code` | - | 信任远程代码 |
+
+### 6.6 API 接口
 
 部署后提供 **OpenAI 兼容 API**:
 
 | 接口 | 路径 | 用途 |
 |------|------|------|
 | 模型列表 | `GET /v1/models` | 查看可用模型 |
-| 对话补全 | `POST /v1/chat/completions` | 多轮对话 |
+| 对话补全 | `POST /v1/chat/completions` | 多轮对话（支持流式） |
 | 文本补全 | `POST /v1/completions` | 文本续写 |
+| 健康检查 | `GET /health` | 服务状态检查 |
 
-### 6.4 推理参数建议
+### 6.7 推理参数建议
 
 | 参数 | 续写场景 | 对话场景 |
 |------|----------|----------|
 | `temperature` | 0.8 - 1.0 | 0.7 |
-| `top_p` | 0.9 | 0.9 |
+| `top_p` | 0.9 | 0.8 |
+| `top_k` | 20 | 20 |
 | `max_tokens` | 500 - 2000 | 200 - 500 |
 | `repetition_penalty` | 1.05 - 1.1 | 1.0 |
 
-### 6.5 服务管理
+### 6.8 服务管理
 
 ```bash
 # 查看服务状态
-tmux attach -t vllm
+tmux attach -t inference
 
 # 查看日志
-tail -f /root/autodl-tmp/outputs/vllm_server.log
+tail -f /root/autodl-tmp/outputs/inference_server.log
 
 # 停止服务
-tmux kill-session -t vllm
+tmux kill-session -t inference
 ```
 
 ---
 
 ## 7. 本地调用与测试
 
-### 7.1 API 测试
+### 7.1 SSH 隧道建立
+
+在本地终端建立 SSH 隧道，将远端服务映射到本地：
+
+```powershell
+# Windows PowerShell
+ssh -p <SSH端口> -L 6006:localhost:6006 root@<AutoDL地址> -N
+
+# 示例
+ssh -p 42655 -L 6006:localhost:6006 root@connect.westd.seetacloud.com -N
+```
+
+建立后，本地即可通过 `http://localhost:6006/v1` 访问远端 API。
+
+### 7.2 API 测试
 
 ```bash
-python scripts/local/test_api.py --api_url http://your-autodl-url:6006/v1
+python scripts/local/test_api.py --api_url http://localhost:6006/v1
 ```
 
 测试项目:
@@ -590,12 +663,12 @@ python scripts/local/test_api.py --api_url http://your-autodl-url:6006/v1
 2. **对话补全** — 测试多轮对话能力
 3. **文本续写** — 测试核心续写能力
 
-### 7.2 对话补全示例
+### 7.3 对话补全示例
 
 ```python
 import requests
 
-resp = requests.post("http://your-url:6006/v1/chat/completions", json={
+resp = requests.post("http://localhost:6006/v1/chat/completions", json={
     "model": "qwen3.6-27b-nsfw",
     "messages": [
         {"role": "user", "content": "你好，请简单介绍一下你自己。"}
@@ -606,10 +679,10 @@ resp = requests.post("http://your-url:6006/v1/chat/completions", json={
 print(resp.json()["choices"][0]["message"]["content"])
 ```
 
-### 7.3 文本续写示例
+### 7.4 文本续写示例
 
 ```python
-resp = requests.post("http://your-url:6006/v1/completions", json={
+resp = requests.post("http://localhost:6006/v1/completions", json={
     "model": "qwen3.6-27b-nsfw",
     "prompt": "夜色渐深，月光透过窗帘洒在地板上，她轻轻推开了房门",
     "max_tokens": 300,
@@ -619,17 +692,90 @@ resp = requests.post("http://your-url:6006/v1/completions", json={
 print(resp.json()["choices"][0]["text"])
 ```
 
-### 7.4 SillyTavern 接入
+---
 
-在 AutoDL 控制台开放端口 6006 后，将外部访问地址配置到 SillyTavern：
-- API 类型: OpenAI Compatible
-- API URL: `http://your-autodl-external-url:port/v1`
-- API Key: `EMPTY`
-- Model: `qwen3.6-27b-nsfw`
+## 8. 本地 UI 接入
+
+### 8.1 方案对比
+
+| 方案 | 优点 | 缺点 | 适合场景 |
+|------|------|------|----------|
+| **SillyTavern** | 角色扮演/续写专精，UI 美观，预设丰富 | 需要 Node.js | NSFW 文学续写、角色扮演 |
+| **Open WebUI** | 类 ChatGPT 界面，简洁易用 | 偏对话，续写功能弱 | 通用对话 |
+| **text-generation-webui** | 功能全面，支持续写/对话/Notebook | 界面稍旧，依赖多 | 全能型测试 |
+
+### 8.2 SillyTavern 接入（推荐）
+
+SillyTavern 最适合 NSFW 文学续写场景，支持角色卡、续写模式、预设管理。
+
+#### 安装（本地 Windows）
+
+```powershell
+# 需要 Node.js >= 18（https://nodejs.org/）
+git clone https://github.com/SillyTavern/SillyTavern.git
+cd SillyTavern
+start.bat
+```
+
+启动后浏览器打开 `http://localhost:8000`
+
+#### 配置连接
+
+1. 确保 SSH 隧道已建立（参见 7.1）
+2. 在 SillyTavern 中配置：
+   - 点击左上角 **API** 图标
+   - **API 类型**：选 `Chat Completion`
+   - **Chat Completion Source**：选 `Custom (OpenAI-compatible)`
+   - **Custom Endpoint**：`http://localhost:6006/v1`
+   - **API Key**：填 `EMPTY`（服务端无鉴权，随意填写）
+   - **Model**：手动输入 `qwen3.6-27b-nsfw`
+   - 点击 **Connect** 测试连接
+
+#### 推荐采样参数
+
+在 SillyTavern 的 Sampler 设置中：
+
+| 参数 | 值 |
+|------|-----|
+| Temperature | 0.8 |
+| Top P | 0.9 |
+| Top K | 20 |
+| Repetition Penalty | 1.05 |
+| Max Response Length | 1000 |
+
+### 8.3 Open WebUI 接入
+
+```powershell
+# Docker 方式
+docker run -d -p 3000:8080 --name open-webui ghcr.io/open-webui/open-webui:main
+
+# 或 pip 安装
+pip install open-webui
+open-webui serve --port 3000
+```
+
+打开 `http://localhost:3000`，在设置中添加 OpenAI 兼容 API：
+- URL: `http://localhost:6006/v1`
+- Key: `EMPTY`
+
+### 8.4 text-generation-webui 接入
+
+```powershell
+git clone https://github.com/oobabooga/text-generation-webui.git
+cd text-generation-webui
+start_windows.bat
+```
+
+启动后在 **Model** 标签页：
+- 选择 `OpenAI` 加载方式
+- 填入 API URL: `http://localhost:6006/v1`
+- Model name: `qwen3.6-27b-nsfw`
+
+支持三种模式：**Chat**（对话）、**Default**（续写）、**Notebook**（笔记本）
 
 ---
 
-## 8. 完整执行顺序
+## 9. 完整执行顺序
 
 ```mermaid
 graph TD
@@ -640,8 +786,9 @@ graph TD
     D --> E
     E --> F[6. 启动训练<br/>run_train.sh]
     F --> G[7. 合并 LoRA<br/>merge_lora.py]
-    G --> H[8. 部署推理<br/>deploy_vllm.sh]
+    G --> H[8. 部署推理<br/>deploy_vllm.sh transformers]
     H --> I[9. 测试验证<br/>test_api.py]
+    I --> J[10. 本地 UI 接入<br/>SillyTavern / Open WebUI]
 ```
 
 ### 命令速查
@@ -661,10 +808,10 @@ bash scripts/remote/run_train.sh
 
 # ===== 合并与部署 =====
 python scripts/remote/merge_lora.py
-bash scripts/remote/deploy_vllm.sh
+bash scripts/remote/deploy_vllm.sh transformers
 
 # ===== 测试 =====
-python scripts/local/test_api.py --api_url http://your-url:6006/v1
+python scripts/local/test_api.py --api_url http://localhost:6006/v1
 ```
 
 ### 本地同步
@@ -695,7 +842,8 @@ scripts\local\sync_to_remote.bat
 | `scripts/remote/mix_datasets.py` | 数据集混合 |
 | `scripts/remote/run_train.sh` | 训练启动 |
 | `scripts/remote/merge_lora.py` | LoRA 合并 |
-| `scripts/remote/deploy_vllm.sh` | vLLM 部署 |
+| `scripts/remote/deploy_vllm.sh` | 推理部署（支持 transformers/vLLM/SGLang） |
+| `scripts/remote/serve_transformers.py` | Transformers 原生推理 API 服务 |
 | `scripts/local/sync_to_remote.bat` | 本地同步到远端 |
 | `scripts/local/test_api.py` | API 测试 |
 
@@ -708,3 +856,30 @@ scripts\local\sync_to_remote.bat
 | CUDA version mismatch | DeepSpeed CPU offload 编译需要匹配 CUDA | 关闭 optimizer offload |
 | eval_dataset not provided | 未设置 val_size | 配置 `val_size: 0.02` |
 | 训练速度慢 | grad_accum 过大导致 GPU 利用率低 | 适当增大 batch_size，减小 grad_accum |
+| vLLM: `vision_config` 缺失 | 合并后纯文本模型缺少 VL 配置 | 使用 transformers 引擎，或从基座模型复制 config.json |
+| SGLang: 不支持 `Qwen3_5ForCausalLM` | SGLang 尚未适配该架构 | 使用 transformers 引擎 |
+| `flash_attn.ops` 模块缺失 | 需要 CUDA ≥ 12.9 | 使用 transformers 引擎（不依赖 flash_attn） |
+| `kernels` 包 ValueError | transformers 5.6.0 的 `hub_kernels` 与 `kernels` 包版本不兼容 | `pip uninstall kernels` |
+| `max_window_layers` 断言失败 | vLLM 不支持部分层滑动窗口 | 使用 transformers 引擎 |
+
+### C. 部署踩坑记录
+
+本项目在部署阶段经历了多次尝试，以下是完整的排错过程：
+
+```mermaid
+graph TD
+    A[vLLM 0.22.0 部署] -->|max_window_layers 断言失败| B[升级 vLLM]
+    B -->|vision_config 缺失| C[加 --language-model-only]
+    C -->|仍然报 vision_config| D[复制基座 config.json]
+    D -->|flash_attn.ops 缺失| E[需要 CUDA 12.9]
+    E -->|无法升级 CUDA| F[尝试 SGLang]
+    F -->|不支持 Qwen3_5ForCausalLM| G[放弃高吞吐引擎]
+    G --> H[✅ 使用 transformers 原生推理]
+```
+
+**最终方案**: 使用 `serve_transformers.py` 基于 FastAPI + transformers 提供 OpenAI 兼容 API。
+虽然吞吐量低于 vLLM/SGLang，但兼容性最好，能正确加载 Qwen3.6 的混合注意力架构。
+
+**未来优化方向**:
+- 等待 vLLM/SGLang 更新适配 Qwen3.6 混合注意力架构后切换
+- 或升级 CUDA 到 12.9+ 解决 `flash_attn` 依赖问题

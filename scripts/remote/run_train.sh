@@ -98,6 +98,11 @@ echo "  ✓ LLaMA-Factory 已安装"
 # ---- 注册数据集到 LLaMA-Factory ----
 echo ""
 echo "[准备] 注册数据集..."
+
+# 设置 HF 缓存到数据盘（避免系统盘空间不足导致 FileNotFoundError）
+export HF_HOME="/root/autodl-tmp/cache/huggingface"
+mkdir -p ${HF_HOME}/datasets
+
 DATASET_INFO_SRC="${CONFIG_DIR}/dataset_info.json"
 DATASET_INFO_DST="${LLAMA_FACTORY_DIR}/data/dataset_info.json"
 

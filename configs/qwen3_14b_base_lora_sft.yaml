@@ -32,7 +32,7 @@ lora_target: all
 
 ### 数据集配置 ###
 dataset: train_mixed
-template: qwen3
+template: qwen3_nothink
 cutoff_len: 4096
 max_samples: 100000
 val_size: 0.02

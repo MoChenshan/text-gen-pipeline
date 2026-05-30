@@ -63,7 +63,7 @@ def merge_lora(
     export_config = {
         "model_name_or_path": base_model_path,
         "adapter_name_or_path": lora_path,
-        "template": "qwen3",
+        "template": "qwen3_nothink",
         "finetuning_type": "lora",
         "export_dir": output_path,
         "export_size": 5,  # 每个分片最大 5GB

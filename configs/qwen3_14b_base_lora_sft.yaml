@@ -1,0 +1,71 @@
+# ============================================================
+# LLaMA-Factory 训练配置 - Qwen3-14B-Base LoRA 微调（单卡版本）
+# 
+# 适用: 1×RTX PRO 6000 96GB 或 1×A100 80GB
+# 单卡直接训练，无需 DeepSpeed
+#
+# 使用方式:
+#   bash run_train.sh 1        # 自动使用此配置
+#   bash run_train.sh 1 0      # 指定 GPU 0
+#
+# 显存估算 (Qwen3-14B BF16 + LoRA rank=64):
+#   模型权重: ~28GB
+#   LoRA 参数 + 优化器状态: ~2-3GB
+#   激活值 (batch=2, seq=4096, grad_ckpt): ~6-10GB
+#   总计: ~36-41GB → 96GB 单卡绰绰有余
+# ============================================================
+
+### 模型配置 ###
+model_name_or_path: /root/autodl-tmp/models/Qwen3-14B-Base
+trust_remote_code: true
+
+### 训练方法 ###
+stage: sft
+do_train: true
+finetuning_type: lora
+
+### LoRA 配置 ###
+lora_rank: 64
+lora_alpha: 128
+lora_dropout: 0.05
+lora_target: all
+
+### 数据集配置 ###
+dataset: train_mixed
+template: qwen3
+cutoff_len: 4096
+max_samples: 100000
+val_size: 0.02
+overwrite_cache: true
+preprocessing_num_workers: 16
+
+### 训练超参数 ###
+# Base 模型无安全对齐，正常微调即可
+# 单卡 96GB: batch=4, grad_accum=4, 有效batch=16
+per_device_train_batch_size: 4
+gradient_accumulation_steps: 4
+learning_rate: 1.5e-4
+num_train_epochs: 3.0
+lr_scheduler_type: cosine
+warmup_ratio: 0.05
+bf16: true
+ddp_timeout: 180000000
+
+### 优化器 ###
+optim: adamw_torch
+
+### 输出配置 ###
+output_dir: /root/autodl-tmp/outputs/qwen3-14b-base-lora
+logging_steps: 10
+save_steps: 500
+save_total_limit: 3
+plot_loss: true
+
+### 评估配置 ###
+per_device_eval_batch_size: 4
+eval_strategy: steps
+eval_steps: 500
+
+### 其他 ###
+report_to: none
+gradient_checkpointing: true

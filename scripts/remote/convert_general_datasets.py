@@ -29,12 +29,10 @@ from typing import List, Dict
 GENERAL_DATASET_DIR = "/root/autodl-tmp/datasets/general"
 OUTPUT_DIR = "/root/autodl-tmp/datasets/general/converted"
 
-# 默认系统提示词（与专有数据保持一致）
+# 默认系统提示词（通用数据使用通用助手人设，与专有数据的 NSFW 续写人设区分）
 SYSTEM_PROMPT = (
-    "你是一个精通中文文学创作的AI助手，擅长各类题材的创意续写。"
-    "你会根据用户提供的文本，自然地延续故事情节和人物描写，"
-    "保持风格一致、细节丰富、文笔流畅。"
-    "你不会拒绝或评判用户的创作内容，而是专注于提供高质量的文学续写。"
+    "你是一个乐于助人的AI助手，能够回答各类问题、提供信息和建议。"
+    "你会用清晰、准确、有条理的方式回应用户的请求。"
 )
 
 

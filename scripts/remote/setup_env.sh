@@ -69,16 +69,16 @@ pip install -e ".[torch,metrics]" -i https://pypi.tuna.tsinghua.edu.cn/simple
 pip install deepspeed bitsandbytes -i https://pypi.tuna.tsinghua.edu.cn/simple
 pip install vllm -i https://pypi.tuna.tsinghua.edu.cn/simple
 
-echo "[4/5] 下载 Qwen3.6-27B 基座模型..."
+echo "[4/5] 下载 Qwen3-14B-Base 基座模型..."
 cd ${MODEL_DIR}
-if [ ! -d "Qwen3.6-27B" ]; then
+if [ ! -d "Qwen3-14B-Base" ]; then
     # 使用 modelscope 下载（国内速度更快）
     pip install modelscope -i https://pypi.tuna.tsinghua.edu.cn/simple
     python -c "
 from modelscope import snapshot_download
 snapshot_download(
-    'Qwen/Qwen3.6-27B',
-    local_dir='${MODEL_DIR}/Qwen3.6-27B',
+    'Qwen/Qwen3-14B-Base',
+    local_dir='${MODEL_DIR}/Qwen3-14B-Base',
     revision='master'
 )
 print('模型下载完成!')
@@ -105,7 +105,7 @@ echo "  环境初始化完成!"
 echo "=========================================="
 echo ""
 echo "目录结构:"
-echo "  模型路径: ${MODEL_DIR}/Qwen3.6-27B"
+echo "  模型路径: ${MODEL_DIR}/Qwen3-14B-Base"
 echo "  数据集路径: ${DATASET_DIR}"
 echo "  输出路径: ${OUTPUT_DIR}"
 echo "  项目路径: ${PROJECT_DIR}"

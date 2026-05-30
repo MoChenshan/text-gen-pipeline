@@ -10,8 +10,8 @@ set -e
 # ---- 默认配置 ----
 ENGINE=${1:-"transformers"}  # 推理引擎: sglang, vllm 或 transformers
 PORT=6006
-MODEL_PATH="/root/autodl-tmp/outputs/qwen3.6-27b-merged"
-MODEL_NAME="qwen3.6-27b-nsfw"
+MODEL_PATH="/root/autodl-tmp/outputs/qwen3-14b-base-merged"
+MODEL_NAME="qwen3-14b-nsfw"
 MAX_MODEL_LEN=8192
 GPU_MEMORY_UTILIZATION=0.90
 LOG_FILE="/root/autodl-tmp/outputs/inference_server.log"
@@ -49,7 +49,7 @@ if [ "${ENGINE}" = "sglang" ]; then
     echo "  API 地址: http://0.0.0.0:${PORT}/v1"
     echo ""
 
-    # SGLang 启动命令（参考 Qwen3.6 官方 README）
+    # SGLang 启动命令（Qwen3-14B-Base）
     # --reasoning-parser qwen3: 支持 thinking 模式解析
     # --mem-fraction-static: GPU 显存静态分配比例
     tmux new-session -d -s inference "python -m sglang.launch_server \
@@ -69,9 +69,8 @@ elif [ "${ENGINE}" = "vllm" ]; then
     echo "  API 地址: http://0.0.0.0:${PORT}/v1"
     echo ""
 
-    # vLLM 启动命令（参考 Qwen3.6 官方 README）
-    # --language-model-only: 跳过视觉编码器，节省显存（纯文本推理）
-    # --reasoning-parser qwen3: 支持 thinking 模式解析
+    # vLLM 启动命令（Qwen3-14B-Base 纯文本模型，无需 --language-model-only）
+    # --reasoning-parser qwen3: 支持 thinking 模式解析（Base 模型训练时用 enable_thinking=False）
     tmux new-session -d -s inference "vllm serve ${MODEL_PATH} \
         --served-model-name ${MODEL_NAME} \
         --port ${PORT} \
@@ -80,7 +79,6 @@ elif [ "${ENGINE}" = "vllm" ]; then
         --max-model-len ${MAX_MODEL_LEN} \
         --gpu-memory-utilization ${GPU_MEMORY_UTILIZATION} \
         --reasoning-parser qwen3 \
-        --language-model-only \
         --trust-remote-code \
     2>&1 | tee ${LOG_FILE}"
 

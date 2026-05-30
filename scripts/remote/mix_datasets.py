@@ -184,10 +184,10 @@ def sample_dataset(data: List[Dict], target_count: int) -> List[Dict]:
 
 def main():
     parser = argparse.ArgumentParser(description="数据集混合脚本")
-    parser.add_argument("--proprietary_ratio", type=float, default=0.65,
-                        help="专有数据集比例 (默认: 0.65)")
-    parser.add_argument("--general_ratio", type=float, default=0.25,
-                        help="通用数据集比例 (默认: 0.25)")
+    parser.add_argument("--proprietary_ratio", type=float, default=0.55,
+                        help="专有数据集比例 (默认: 0.55，Base模型无需高比例压制安全对齐)")
+    parser.add_argument("--general_ratio", type=float, default=0.35,
+                        help="通用数据集比例 (默认: 0.35，Base模型需更多通用数据保能力)")
     parser.add_argument("--creative_ratio", type=float, default=0.10,
                         help="创意写作数据集比例 (默认: 0.10)")
     parser.add_argument("--total_samples", type=int, default=300000,
@@ -281,6 +281,20 @@ def main():
     print(f"\n[合并] 合并所有数据...")
     final_data = proprietary_data + general_sampled + creative_sampled
     
+    # 清理多媒体占位符标签（防止 LLaMA-Factory 误识别）
+    sanitized = 0
+    MEDIA_TAGS = ["<video>", "<audio>", "<image>"]
+    for item in final_data:
+        for conv in item.get("conversations", []):
+            v = conv.get("value", "")
+            for tag in MEDIA_TAGS:
+                if tag in v:
+                    conv["value"] = v.replace(tag, tag.replace("<", "\\<").replace(">", "\\>"))
+                    sanitized += 1
+                    v = conv["value"]
+    if sanitized > 0:
+        print(f"  清理了 {sanitized} 处多媒体占位符标签")
+
     # 为缺少 system message 的条目注入系统提示词
     injected = 0
     for item in final_data:

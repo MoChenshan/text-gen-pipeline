@@ -1,0 +1,67 @@
+# ============================================================
+# LLaMA-Factory 训练配置 - Qwen3-14B-Base LoRA 微调（4卡版本）
+# 
+# 适用: 4×RTX PRO 6000 96GB 或 4×A100 80GB
+# 使用 DeepSpeed ZeRO-2 进行数据并行
+#
+# 使用方式:
+#   bash run_train.sh 4
+#   bash run_train.sh 4 0,1,2,3
+# ============================================================
+
+### 模型配置 ### 
+model_name_or_path: /root/autodl-tmp/models/Qwen3-14B-Base
+trust_remote_code: true
+
+### 训练方法 ###
+stage: sft
+do_train: true
+finetuning_type: lora
+
+### LoRA 配置 ###
+lora_rank: 64
+lora_alpha: 128
+lora_dropout: 0.05
+lora_target: all
+
+### DeepSpeed ###
+deepspeed: /root/project/text-gen-pipeline/configs/ds_z2_config.json
+
+### 数据集配置 ###
+dataset: train_mixed
+template: qwen3
+cutoff_len: 4096
+max_samples: 100000
+val_size: 0.02
+overwrite_cache: true
+preprocessing_num_workers: 16
+
+### 训练超参数 ###
+# 4卡: batch=2, accum=4, 有效batch=2×4×4=32
+per_device_train_batch_size: 2
+gradient_accumulation_steps: 4
+learning_rate: 1.5e-4
+num_train_epochs: 3.0
+lr_scheduler_type: cosine
+warmup_ratio: 0.05
+bf16: true
+ddp_timeout: 180000000
+
+### 优化器 ###
+optim: adamw_torch
+
+### 输出配置 ###
+output_dir: /root/autodl-tmp/outputs/qwen3-14b-base-lora-4gpu
+logging_steps: 10
+save_steps: 500
+save_total_limit: 3
+plot_loss: true
+
+### 评估配置 ###
+per_device_eval_batch_size: 2
+eval_strategy: steps
+eval_steps: 500
+
+### 其他 ###
+report_to: none
+gradient_checkpointing: true

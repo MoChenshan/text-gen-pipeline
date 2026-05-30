@@ -43,7 +43,7 @@ def test_chat_completion(api_url: str, api_key: str = "EMPTY"):
                 "Content-Type": "application/json",
             },
             json={
-                "model": "qwen3.6-27b-nsfw",
+                "model": "qwen3-14b-nsfw",
                 "messages": [
                     {"role": "user", "content": "你好，请简单介绍一下你自己。"}
                 ],
@@ -78,7 +78,7 @@ def test_completion(api_url: str, api_key: str = "EMPTY"):
                 "Content-Type": "application/json",
             },
             json={
-                "model": "qwen3.6-27b-nsfw",
+                "model": "qwen3-14b-nsfw",
                 "prompt": "夜色渐深，月光透过窗帘洒在地板上，她轻轻推开了房门",
                 "max_tokens": 300,
                 "temperature": 0.8,

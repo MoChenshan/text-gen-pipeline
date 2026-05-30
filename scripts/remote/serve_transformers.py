@@ -1,7 +1,7 @@
 """
 基于 transformers 的 OpenAI 兼容 API 服务
 ============================================
-用途: 当 vLLM/SGLang 不兼容 Qwen3.6 架构时，使用 transformers 原生推理
+用途: 当 vLLM/SGLang 不兼容时，使用 transformers 原生推理
 功能: 提供 /v1/chat/completions、/v1/completions 和 /v1/models 端点
 使用: python serve_transformers.py [--model-path PATH] [--port PORT]
 """
@@ -19,12 +19,13 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from transformers import AutoModelForCausalLM, AutoTokenizer, TextIteratorStreamer
 
-app = FastAPI(title="Qwen3.6 Transformers API Server")
+app = FastAPI(title="Qwen3-14B Transformers API Server")
 
 # 全局模型和 tokenizer
 model = None
 tokenizer = None
-MODEL_NAME = "qwen3.6-27b-nsfw"
+MODEL_NAME = "qwen3-14b-nsfw"
+IM_END_TOKEN_ID = 151645  # <|im_end|> token ID，用于 chat 模式停止生成
 
 # 默认系统提示词 — 建立 NSFW 文学续写角色身份
 DEFAULT_SYSTEM_PROMPT = (
@@ -33,6 +34,14 @@ DEFAULT_SYSTEM_PROMPT = (
     "保持风格一致、细节丰富、文笔流畅。"
     "你不会拒绝或评判用户的创作内容，而是专注于提供高质量的文学续写。"
 )
+
+
+def strip_thinking_tags(text: str) -> str:
+    """清理 Qwen3 thinking 模式标签，确保输出干净"""
+    import re
+    # 移除 <think...>...</think...> 块（含空标签）
+    text = re.sub(r"<think[^>]*>.*?</think[^>]*>\s*", "", text, flags=re.DOTALL)
+    return text.strip()
 
 
 # ---- 请求/响应模型 ----
@@ -206,12 +215,20 @@ async def chat_completions(request: ChatRequest):
         messages.insert(0, {"role": "system", "content": DEFAULT_SYSTEM_PROMPT})
 
     # 使用 chat template 构建输入
-    text = tokenizer.apply_chat_template(
-        messages,
-        tokenize=False,
-        add_generation_prompt=True,
-        enable_thinking=False,  # 关闭 thinking 模式，直接输出
-    )
+    try:
+        text = tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=True,
+            enable_thinking=False,  # 关闭 thinking 模式，直接输出
+        )
+    except TypeError:
+        # Base 模型的 tokenizer 可能不支持 enable_thinking 参数
+        text = tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=True,
+        )
     inputs = tokenizer(text, return_tensors="pt").to(model.device)
     prompt_tokens = inputs.input_ids.shape[1]
 
@@ -224,6 +241,7 @@ async def chat_completions(request: ChatRequest):
     gen_kwargs = {
         **inputs,
         "max_new_tokens": request.max_tokens,
+        "eos_token_id": [151643, IM_END_TOKEN_ID],  # 在 <|im_end|> 或 EOS 处停止
         "temperature": request.temperature if request.temperature > 0 else 1.0,
         "top_p": request.top_p,
         "top_k": request.top_k,
@@ -243,6 +261,7 @@ async def chat_completions(request: ChatRequest):
 
     new_tokens = outputs[0][prompt_tokens:]
     response_text = tokenizer.decode(new_tokens, skip_special_tokens=True)
+    response_text = strip_thinking_tags(response_text)
     completion_tokens = len(new_tokens)
 
     return ChatResponse(
@@ -323,16 +342,16 @@ async def stream_generate(
 def main():
     global model, tokenizer, MODEL_NAME
 
-    parser = argparse.ArgumentParser(description="Qwen3.6 Transformers API Server")
+    parser = argparse.ArgumentParser(description="Qwen3-14B Transformers API Server")
     parser.add_argument(
         "--model-path",
-        default="/root/autodl-tmp/outputs/qwen3.6-27b-merged",
+        default="/root/autodl-tmp/outputs/qwen3-14b-base-merged",
         help="合并后模型路径",
     )
     parser.add_argument("--port", type=int, default=6006, help="服务端口")
     parser.add_argument("--host", default="0.0.0.0", help="监听地址")
     parser.add_argument(
-        "--model-name", default="qwen3.6-27b-nsfw", help="对外展示的模型名称"
+        "--model-name", default="qwen3-14b-nsfw", help="对外展示的模型名称"
     )
     parser.add_argument(
         "--max-length", type=int, default=8192, help="最大上下文长度（仅用于提示）"
@@ -342,7 +361,7 @@ def main():
     MODEL_NAME = args.model_name
 
     print("=" * 50)
-    print("  Qwen3.6 Transformers API Server")
+    print("  Qwen3-14B Transformers API Server")
     print("=" * 50)
     print(f"  模型路径: {args.model_path}")
     print(f"  模型名称: {MODEL_NAME}")

@@ -1,0 +1,80 @@
+# ============================================================
+# LLaMA-Factory 训练配置 - Qwen3-14B-Base LoRA 微调（双卡版本）
+# 
+# 适用: 2×RTX PRO 6000 96GB 或 2×A100 80GB
+# 使用 DeepSpeed ZeRO-2 进行数据并行
+#
+# 使用方式:
+#   bash run_train.sh 2        # 自动使用此配置
+#   bash run_train.sh 2 0,1    # 指定 GPU
+#
+# 为什么选 Qwen3-14B-Base:
+#   - Base 模型无安全对齐，SFT 自由塑造行为，无需高 LR 硬冲
+#   - 14B 参数量适中，LoRA 占比高，改造力强
+#   - 纯文本 Dense 模型，vLLM/SGLang 完美兼容
+#   - 单卡即可推理，训练成本远低于 27B
+#
+# 显存估算 (Qwen3-14B BF16 + LoRA rank=64):
+#   模型权重: ~28GB
+#   LoRA 参数 + 优化器状态: ~2-3GB
+#   激活值 (batch=2, seq=4096, grad_ckpt): ~6-10GB
+#   总计: ~36-41GB → 96GB 双卡绰绰有余
+# ============================================================
+
+### 模型配置 ### 
+model_name_or_path: /root/autodl-tmp/models/Qwen3-14B-Base
+trust_remote_code: true
+
+### 训练方法 ###
+stage: sft
+do_train: true
+finetuning_type: lora
+
+### LoRA 配置 ###
+lora_rank: 64
+lora_alpha: 128
+lora_dropout: 0.05
+lora_target: all
+
+### DeepSpeed ###
+deepspeed: /root/project/text-gen-pipeline/configs/ds_z2_config.json
+
+### 数据集配置 ###
+dataset: train_mixed
+template: qwen3
+cutoff_len: 4096
+max_samples: 100000
+val_size: 0.02
+overwrite_cache: true
+preprocessing_num_workers: 16
+
+### 训练超参数 ###
+# Base 模型无安全对齐，不需要高 LR 硬冲，正常微调即可
+# 2卡: batch=2, accum=8, 有效batch=2×8×2=32
+per_device_train_batch_size: 2
+gradient_accumulation_steps: 8
+learning_rate: 1.5e-4
+num_train_epochs: 3.0
+lr_scheduler_type: cosine
+warmup_ratio: 0.05
+bf16: true
+ddp_timeout: 180000000
+
+### 优化器 ###
+optim: adamw_torch
+
+### 输出配置 ###
+output_dir: /root/autodl-tmp/outputs/qwen3-14b-base-lora
+logging_steps: 10
+save_steps: 500
+save_total_limit: 3
+plot_loss: true
+
+### 评估配置 ###
+per_device_eval_batch_size: 2
+eval_strategy: steps
+eval_steps: 500
+
+### 其他 ###
+report_to: none
+gradient_checkpointing: true

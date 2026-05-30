@@ -151,13 +151,13 @@ def merge_lora_manual(
 def main():
     parser = argparse.ArgumentParser(description="LoRA 权重合并脚本")
     parser.add_argument("--base_model", type=str,
-                        default="/root/autodl-tmp/models/Qwen3.6-27B",
+                        default="/root/autodl-tmp/models/Qwen3-14B-Base",
                         help="基座模型路径")
     parser.add_argument("--lora_path", type=str,
-default="/root/autodl-tmp/outputs/qwen3.6-27b-lora",
+                        default="/root/autodl-tmp/outputs/qwen3-14b-base-lora",
                         help="LoRA 权重路径")
     parser.add_argument("--output_path", type=str,
-default="/root/autodl-tmp/outputs/qwen3.6-27b-merged",
+                        default="/root/autodl-tmp/outputs/qwen3-14b-base-merged",
                         help="合并后模型输出路径")
     parser.add_argument("--method", type=str, choices=["llamafactory", "manual"],
                         default="manual",

@@ -32,7 +32,7 @@ deepspeed: /root/project/text-gen-pipeline/configs/ds_z2_config.json
 
 ### 从已有 LoRA 权重续训（只加载权重，不加载优化器状态） ###
 ### 6卡无法 resume 2卡的 DeepSpeed checkpoint，改用 adapter 加载 ###
-adapter_name_or_path: /root/autodl-tmp/outputs/qwen3.6-27b-lora/checkpoint-1532
+adapter_name_or_path: /root/autodl-tmp/outputs/qwen3.6-27b-lora-adapter
 
 ### 数据集配置 ###
 dataset: train_mixed

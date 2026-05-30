@@ -190,6 +190,10 @@ async def completions(request: CompletionRequest):
     response_text = tokenizer.decode(new_tokens, skip_special_tokens=True)
     completion_tokens = len(new_tokens)
 
+    # 回收显存
+    del outputs, gen_kwargs
+    torch.cuda.empty_cache()
+
     return CompletionResponse(
         id=f"cmpl-{uuid.uuid4().hex[:12]}",
         created=int(time.time()),
@@ -264,6 +268,10 @@ async def chat_completions(request: ChatRequest):
     response_text = strip_thinking_tags(response_text)
     completion_tokens = len(new_tokens)
 
+    # 回收显存
+    del outputs, gen_kwargs
+    torch.cuda.empty_cache()
+
     return ChatResponse(
         id=f"chatcmpl-{uuid.uuid4().hex[:12]}",
         created=int(time.time()),
@@ -335,6 +343,10 @@ async def stream_generate(
     yield "data: [DONE]\n\n"
 
     thread.join()
+
+    # 回收显存
+    del gen_kwargs
+    torch.cuda.empty_cache()
 
 
 # ---- 主函数 ----

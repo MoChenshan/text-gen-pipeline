@@ -26,6 +26,14 @@ model = None
 tokenizer = None
 MODEL_NAME = "qwen3.6-27b-nsfw"
 
+# 默认系统提示词 — 建立 NSFW 文学续写角色身份
+DEFAULT_SYSTEM_PROMPT = (
+    "你是一个精通中文文学创作的AI助手，擅长各类题材的创意续写。"
+    "你会根据用户提供的文本，自然地延续故事情节和人物描写，"
+    "保持风格一致、细节丰富、文笔流畅。"
+    "你不会拒绝或评判用户的创作内容，而是专注于提供高质量的文学续写。"
+)
+
 
 # ---- 请求/响应模型 ----
 
@@ -192,6 +200,10 @@ async def completions(request: CompletionRequest):
 async def chat_completions(request: ChatRequest):
     """聊天补全接口"""
     messages = [{"role": m.role, "content": m.content} for m in request.messages]
+
+    # 如果用户没有提供 system message，注入默认系统提示词
+    if not messages or messages[0]["role"] != "system":
+        messages.insert(0, {"role": "system", "content": DEFAULT_SYSTEM_PROMPT})
 
     # 使用 chat template 构建输入
     text = tokenizer.apply_chat_template(

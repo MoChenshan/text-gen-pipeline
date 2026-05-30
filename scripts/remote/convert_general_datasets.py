@@ -29,6 +29,14 @@ from typing import List, Dict
 GENERAL_DATASET_DIR = "/root/autodl-tmp/datasets/general"
 OUTPUT_DIR = "/root/autodl-tmp/datasets/general/converted"
 
+# 默认系统提示词（与专有数据保持一致）
+SYSTEM_PROMPT = (
+    "你是一个精通中文文学创作的AI助手，擅长各类题材的创意续写。"
+    "你会根据用户提供的文本，自然地延续故事情节和人物描写，"
+    "保持风格一致、细节丰富、文笔流畅。"
+    "你不会拒绝或评判用户的创作内容，而是专注于提供高质量的文学续写。"
+)
+
 
 def convert_firefly(input_path: str) -> List[Dict]:
     """
@@ -47,6 +55,7 @@ def convert_firefly(input_path: str) -> List[Dict]:
         
         conversations.append({
             "conversations": [
+                {"from": "system", "value": SYSTEM_PROMPT},
                 {"from": "human", "value": input_text},
                 {"from": "gpt", "value": target_text}
             ]
@@ -83,6 +92,7 @@ def convert_coig_cqia(input_path: str) -> List[Dict]:
         
         conversations.append({
             "conversations": [
+                {"from": "system", "value": SYSTEM_PROMPT},
                 {"from": "human", "value": user_msg},
                 {"from": "gpt", "value": output_text}
             ]
@@ -118,6 +128,7 @@ def convert_alpaca_zh(input_path: str) -> List[Dict]:
         
         conversations.append({
             "conversations": [
+                {"from": "system", "value": SYSTEM_PROMPT},
                 {"from": "human", "value": user_msg},
                 {"from": "gpt", "value": output_text}
             ]

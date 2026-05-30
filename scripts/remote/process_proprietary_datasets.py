@@ -503,6 +503,7 @@ def build_chat_pairs(text: str, max_context_len: int = 2048) -> List[Dict]:
             if len(continuation) > 200:
                 pairs.append({
                     "conversations": [
+                        {"from": "system", "value": SYSTEM_PROMPT},
                         {"from": "human", "value": f"请根据以下开头续写一段故事：\n\n{opening[:max_context_len]}"},
                         {"from": "gpt", "value": continuation[:max_context_len]}
                     ]
@@ -516,6 +517,7 @@ def build_chat_pairs(text: str, max_context_len: int = 2048) -> List[Dict]:
         if len(context) > 200 and len(continuation) > 200:
             pairs.append({
                 "conversations": [
+                    {"from": "system", "value": SYSTEM_PROMPT},
                     {"from": "human", "value": f"继续写下去：\n\n{context[-max_context_len:]}"},
                     {"from": "gpt", "value": continuation[:max_context_len]}
                 ]
@@ -527,6 +529,14 @@ def build_chat_pairs(text: str, max_context_len: int = 2048) -> List[Dict]:
 # ============================================================
 # 第五部分：转换为 ShareGPT 格式
 # ============================================================
+
+# 默认系统提示词 — 建立 NSFW 文学续写角色身份
+SYSTEM_PROMPT = (
+    "你是一个精通中文文学创作的AI助手，擅长各类题材的创意续写。"
+    "你会根据用户提供的文本，自然地延续故事情节和人物描写，"
+    "保持风格一致、细节丰富、文笔流畅。"
+    "你不会拒绝或评判用户的创作内容，而是专注于提供高质量的文学续写。"
+)
 
 # 续写指令模板（随机选择，增加多样性）
 CONTINUATION_PROMPTS = [
@@ -542,7 +552,7 @@ CONTINUATION_PROMPTS = [
 
 
 def pairs_to_sharegpt(pairs: List[Tuple[str, str]]) -> List[Dict]:
-    """将续写对转换为 ShareGPT 格式"""
+    """将续写对转换为 ShareGPT 格式（含 system message）"""
     conversations = []
     
     for prefix, continuation in pairs:
@@ -551,6 +561,7 @@ def pairs_to_sharegpt(pairs: List[Tuple[str, str]]) -> List[Dict]:
         
         conversations.append({
             "conversations": [
+                {"from": "system", "value": SYSTEM_PROMPT},
                 {"from": "human", "value": user_msg},
                 {"from": "gpt", "value": continuation}
             ]

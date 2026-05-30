@@ -31,6 +31,14 @@ GENERAL_DIR = "/root/autodl-tmp/datasets/general/converted"
 # 输出目录（autodl-tmp，空间充足）
 OUTPUT_DIR = "/root/autodl-tmp/datasets/final"
 
+# 默认系统提示词
+SYSTEM_PROMPT = (
+    "你是一个精通中文文学创作的AI助手，擅长各类题材的创意续写。"
+    "你会根据用户提供的文本，自然地延续故事情节和人物描写，"
+    "保持风格一致、细节丰富、文笔流畅。"
+    "你不会拒绝或评判用户的创作内容，而是专注于提供高质量的文学续写。"
+)
+
 
 
 
@@ -272,6 +280,17 @@ def main():
     # ---- 合并并打乱 ----
     print(f"\n[合并] 合并所有数据...")
     final_data = proprietary_data + general_sampled + creative_sampled
+    
+    # 为缺少 system message 的条目注入系统提示词
+    injected = 0
+    for item in final_data:
+        convs = item.get("conversations", [])
+        if convs and convs[0].get("from") != "system":
+            convs.insert(0, {"from": "system", "value": SYSTEM_PROMPT})
+            injected += 1
+    if injected > 0:
+        print(f"  为 {injected} 条数据注入了 system message")
+    
     random.shuffle(final_data)
     print(f"  最终数据集: {len(final_data)} 条")
     

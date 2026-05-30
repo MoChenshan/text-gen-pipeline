@@ -204,6 +204,7 @@ clean_text(text) 处理:
 ```json
 {
     "conversations": [
+        {"from": "system", "value": "你是一个精通中文文学创作的AI助手，擅长各类题材的创意续写..."},
         {"from": "human", "value": "请续写以下内容：\n\n{prefix}"},
         {"from": "gpt", "value": "{continuation}"}
     ]
@@ -220,7 +221,20 @@ clean_text(text) 处理:
 - "请补充后续内容：\n\n{prefix}"
 - "继续：\n\n{prefix}"
 
-#### 3.1.7 输出统计
+#### 3.1.7 System Message
+
+所有训练数据均包含 system message，用于建立模型的角色身份：
+
+```
+你是一个精通中文文学创作的AI助手，擅长各类题材的创意续写。
+你会根据用户提供的文本，自然地延续故事情节和人物描写，
+保持风格一致、细节丰富、文笔流畅。
+你不会拒绝或评判用户的创作内容，而是专注于提供高质量的文学续写。
+```
+
+> **为什么需要 system message？** Qwen3.6 基座模型有很强的安全对齐，不加 system message 时，模型倾向于拒绝 NSFW 内容。通过在训练数据和推理时都注入角色身份提示词，可以显著降低拒绝率。
+
+#### 3.1.8 输出统计
 
 | 指标 | 数值 |
 |------|------|
@@ -347,6 +361,28 @@ bash scripts/remote/run_train.sh 2 0,1   # 指定GPU
 
 训练在 `tmux` 会话中后台运行，防止 SSH 断开中断。
 
+### 4.1.1 从已有 Checkpoint 续训
+
+如果已有训练好的 LoRA 权重，想在此基础上继续训练（例如加了 system message 后重新训练数据）：
+
+1. 找到最新的 checkpoint 目录：
+```bash
+ls /root/autodl-tmp/outputs/qwen3.6-27b-lora/
+# 输出类似: checkpoint-1500  runs  ...
+```
+
+2. 编辑 `configs/qwen3.6_27b_lora_sft_2gpu.yaml`，取消注释并填入 checkpoint 路径：
+```yaml
+resume_from_checkpoint: /root/autodl-tmp/outputs/qwen3.6-27b-lora/checkpoint-1500
+```
+
+3. 重新训练（只需少量 epoch，建议 1-2 个）：
+```bash
+bash scripts/remote/run_train.sh 2
+```
+
+> **注意**: 续训时学习率会从 checkpoint 中的调度器状态继续，`warmup_steps` 不会重新生效。如需重新预热，可适当提高 `learning_rate`。
+
 ### 4.2 训练配置详解
 
 配置文件: `configs/qwen3.6_27b_lora_sft_2gpu.yaml`
@@ -377,7 +413,7 @@ bash scripts/remote/run_train.sh 2 0,1   # 指定GPU
 | `dataset` | train_mixed | 数据集名称（对应 dataset_info.json） |
 | `template` | qwen3 | 对话模板（匹配 Qwen3 系列） |
 | `cutoff_len` | 4096 | 最大序列长度（token 数） |
-| `max_samples` | 50000 | 从数据集中最多取 5 万条 |
+| `max_samples` | 100000 | 从数据集中最多取 10 万条 |
 | `val_size` | 0.02 | 2% 数据用于验证 |
 | `overwrite_cache` | true | 覆盖缓存 |
 | `preprocessing_num_workers` | 16 | 数据预处理并行数 |
@@ -390,7 +426,7 @@ bash scripts/remote/run_train.sh 2 0,1   # 指定GPU
 | `gradient_accumulation_steps` | 16 | 梯度累积步数 |
 | **有效 batch size** | **32** | = 1 × 16 × 2 GPUs |
 | `learning_rate` | 2e-4 | 学习率 |
-| `num_train_epochs` | 1.0 | 训练轮数 |
+| `num_train_epochs` | 2.0 | 训练轮数 |
 | `lr_scheduler_type` | cosine | 余弦退火学习率调度 |
 | `warmup_steps` | 50 | 学习率预热步数 |
 | `bf16` | true | BFloat16 混合精度训练 |
@@ -442,11 +478,12 @@ bash scripts/remote/run_train.sh 2 0,1   # 指定GPU
 
 | 指标 | 值 |
 |------|-----|
-| 训练样本数 | 49,000（50000 × 98% 训练集） |
-| 验证样本数 | 1,000（50000 × 2%） |
-| 总优化步数 | ~1,532 |
+| 训练样本数 | 98,000（100000 × 98% 训练集） |
+| 验证样本数 | 2,000（100000 × 2%） |
+| 总优化步数 | ~6,125（2 epochs） |
 | 每步耗时 | ~50-60 秒 |
-| 预计总时间 | ~22-25 小时 |
+| 预计总时间 | ~85-100 小时（完整训练） |
+| 续训预估 | ~42-50 小时（1 epoch，从 checkpoint 继续） |
 | 显存占用 | ~67GB / 卡 |
 
 #### 4.2.8 Loss 预期
@@ -794,6 +831,10 @@ graph TD
 ### 命令速查
 
 ```bash
+# ===== 激活 conda 环境 =====
+source /root/miniconda3/etc/profile.d/conda.sh  # AutoDL 需要先初始化 conda
+conda activate llama_factory
+
 # ===== 环境搭建 =====
 bash scripts/remote/setup_env.sh
 

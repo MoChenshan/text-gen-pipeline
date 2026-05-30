@@ -139,7 +139,7 @@ echo "  配置文件: ${TRAIN_CONFIG}"
 echo "  训练模式: ${TRAIN_MODE}"
 echo "  模型: Qwen3.6-27B (BF16)"
 echo "  方法: LoRA (rank=64, alpha=128, target=all)"
-echo "  序列长度: 4096"
+echo "  序列长度: 8192"
 case ${NUM_GPUS} in
     1) echo "  有效Batch Size: 2 × 8 (grad_accum) = 16" ;;
     2) echo "  有效Batch Size: 1 × 16 (grad_accum) × 2 (GPUs) = 32" ;;
@@ -147,7 +147,7 @@ case ${NUM_GPUS} in
     6) echo "  有效Batch Size: 1 × 6 (grad_accum) × 6 (GPUs) = 36" ;;
     *) echo "  有效Batch Size: 见配置文件" ;;
 esac
-echo "  学习率: 5e-4 (cosine scheduler)"
+echo "  学习率: 5e-4 (constant_with_warmup scheduler)"
 echo "  Epochs: 1"
 echo "  Gradient Checkpointing: 开启"
 echo ""

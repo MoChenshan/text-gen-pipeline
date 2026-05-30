@@ -155,10 +155,10 @@ def sample_dataset(data: List[Dict], target_count: int) -> List[Dict]:
 
 def main():
     parser = argparse.ArgumentParser(description="数据集混合脚本")
-    parser.add_argument("--proprietary_ratio", type=float, default=0.55,
-                        help="专有数据集比例 (默认: 0.55，Base模型无需高比例压制安全对齐)")
-    parser.add_argument("--general_ratio", type=float, default=0.35,
-                        help="通用数据集比例 (默认: 0.35，Base模型需更多通用数据保能力)")
+    parser.add_argument("--proprietary_ratio", type=float, default=0.70,
+                        help="专有数据集比例 (默认: 0.70，保证 NSFW 续写风格稳定)")
+    parser.add_argument("--general_ratio", type=float, default=0.20,
+                        help="通用数据集比例 (默认: 0.20，Base模型灾难性遗忘风险低)")
     parser.add_argument("--creative_ratio", type=float, default=0.10,
                         help="创意写作数据集比例 (默认: 0.10)")
     parser.add_argument("--total_samples", type=int, default=300000,

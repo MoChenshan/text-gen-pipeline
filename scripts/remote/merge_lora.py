@@ -103,6 +103,8 @@ def merge_lora_manual(
     """
     手动合并 LoRA（不依赖 LLaMA-Factory）
     """
+    import shutil as _shutil
+    import glob
     from transformers import AutoModelForCausalLM, AutoTokenizer
     from peft import PeftModel
     import torch
@@ -129,6 +131,19 @@ def merge_lora_manual(
     print("复制 tokenizer...")
     tokenizer = AutoTokenizer.from_pretrained(base_model_path, trust_remote_code=True)
     tokenizer.save_pretrained(output_path)
+    
+    # 复制基座模型的额外配置文件（保持与原始模型一致）
+    extra_files = [
+        "preprocessor_config.json",
+        "video_preprocessor_config.json",
+        "chat_template.jinja",
+    ]
+    print("复制额外配置文件...")
+    for fname in extra_files:
+        src = os.path.join(base_model_path, fname)
+        if os.path.exists(src):
+            _shutil.copy2(src, os.path.join(output_path, fname))
+            print(f"  复制: {fname}")
     
     print(f"\n合并完成! 输出路径: {output_path}")
 
